@@ -11,7 +11,7 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.phone import JoinGroupCallRequest, CheckGroupCallRequest
-from telethon.tl.types import DataJSON, InputGroupCall
+from telethon.tl.types import DataJSON, InputGroupCall, PeerChannel
 from telethon.errors import RPCError
 
 # Ensure UTF-8 console output for logs
@@ -32,7 +32,7 @@ service_status = {
     "started_at": time.time(),
     "status": "initializing",
     "is_in_live": False,
-    "current_channel": None,
+    "current_channel": str(CHANNEL_ID),
     "last_live_detected": None,
     "last_joined": None,
     "total_pings_received": 0
@@ -52,17 +52,22 @@ async def live_stream_listener_service():
         try:
             channel = await client.get_entity(CHANNEL_ID)
         except Exception:
-            async for dialog in client.iter_dialogs():
-                if dialog.id == CHANNEL_ID or str(dialog.id) == str(CHANNEL_ID) or f"-100{dialog.entity.id}" == str(CHANNEL_ID):
-                    channel = dialog.entity
-                    break
+            try:
+                # Try raw positive channel peer ID if -100 prefix failed
+                clean_id = int(str(CHANNEL_ID).replace("-100", ""))
+                channel = await client.get_entity(PeerChannel(clean_id))
+            except Exception:
+                async for dialog in client.iter_dialogs():
+                    if dialog.id == CHANNEL_ID or str(dialog.id) == str(CHANNEL_ID) or f"-100{dialog.entity.id}" == str(CHANNEL_ID):
+                        channel = dialog.entity
+                        break
         if not channel:
-            print(f"[SERVICE] Channel {CHANNEL_ID} not found. Retrying in 10s...", flush=True)
-            await asyncio.sleep(10)
+            print(f"[SERVICE] Channel {CHANNEL_ID} not found. Retrying in 5s...", flush=True)
+            await asyncio.sleep(5)
 
-    service_status["current_channel"] = f"{channel.title} ({channel.id})"
+    service_status["current_channel"] = f"{getattr(channel, 'title', 'Channel')} ({channel.id})"
     service_status["status"] = "monitoring"
-    print(f"[SERVICE] Monitoring target channel: '{channel.title}' (ID: {channel.id})", flush=True)
+    print(f"[SERVICE] Monitoring target channel: '{getattr(channel, 'title', 'Channel')}' (ID: {channel.id})", flush=True)
 
     is_in_live = False
     current_call_id = None
@@ -133,7 +138,7 @@ async def live_stream_listener_service():
                         service_status["is_in_live"] = True
                         service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                         ping_counter = 0
-                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream successfully! Active on '{channel.title}'", flush=True)
+                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream successfully! Active on '{getattr(channel, 'title', 'Channel')}'", flush=True)
                     else:
                         print(f"[{time.strftime('%H:%M:%S')}] Failed to join live stream. Will retry...", flush=True)
                 else:
