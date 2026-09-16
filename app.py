@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import GetFullChannelRequest, JoinChannelRequest
+from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.functions.phone import JoinGroupCallRequest, CheckGroupCallRequest
 from telethon.tl.types import DataJSON, InputGroupCall, PeerChannel
@@ -27,7 +27,6 @@ API_ID = int(os.getenv("API_ID", "27634392"))
 API_HASH = os.getenv("API_HASH", "c29325ca5de227dc611e54d355f76896")
 SESSION_KEY = os.getenv("SESSION_KEY", "1BVtsOGwBuz8vHuPpNuD-zFio1ZhVeIl94gLKDOycaPwrM6mZLyrY8APMQGTSMjMmWw7nU1h8XEyLMybbcrfbhv1kDzvLyiiTu_dqCapqgtwSCD_p6pM0FKWD9Fdg9ZAkgNac0iN_DKa10ECnXSYpzpSOFdWePvDtsy1vGQzFRxT5xbJBF92Wja7w1sMRT8yflFLWWQOSYsMYVAn83ssCPAVGFyEklL5oNgjaxoMMvH7qxB_piEE8rvMws8CFbX2a6zKtF-s_-Tk6S7lsdoDOVuQOItHpclxOpoS36ZAVpH4xb64r5Hgfj5BUjnyMKspKRJ8K8SRY5Cu45Bu09F53nHGtvmi8tSY=")
 
-# CHANNEL_ID can be integer ID (-1003962785452), @username, or invite link
 RAW_CHANNEL = os.getenv("CHANNEL_ID", "-1003962785452")
 
 try:
@@ -48,8 +47,11 @@ service_status = {
 }
 
 async def resolve_target_channel(client, target):
-    """Resolves target channel via get_entity, invite link, username, or dialog cache."""
-    # 1. Check invite link (e.g., https://t.me/+abcxyz or https://t.me/joinchat/abcxyz)
+    """
+    Populates Telethon's entity cache in memory by fetching dialogs, 
+    then resolves the target channel by ID, Username, or Invite Link.
+    """
+    # 1. Handle Invite Links (e.g. https://t.me/+... or joinchat)
     if isinstance(target, str) and ("t.me/+" in target or "joinchat/" in target):
         invite_hash = target.split("+")[-1].split("joinchat/")[-1].strip("/")
         try:
@@ -59,36 +61,45 @@ async def resolve_target_channel(client, target):
         except UserAlreadyParticipantError:
             pass
         except Exception as e:
-            print(f"[SERVICE] Invite link import error: {e}", flush=True)
+            print(f"[SERVICE] Invite link import notice: {e}", flush=True)
 
-    # 2. Try direct get_entity
+    # 2. Fetch all dialogs to populate Telethon's RAM entity cache
+    try:
+        print("[SERVICE] Pre-loading user dialogs to cache channel access tokens...", flush=True)
+        dialogs = await client.get_dialogs(limit=None)
+        
+        target_str = str(target)
+        target_clean = target_str.replace("-100", "").strip()
+
+        for d in dialogs:
+            d_id = getattr(d, 'id', 0)
+            e_id = getattr(d.entity, 'id', 0)
+            d_id_str = str(d_id)
+            e_id_str = str(e_id)
+
+            # Match against full ID (-1003962785452), positive ID (3962785452), or title/username
+            if (target_str in (d_id_str, e_id_str) or 
+                target_clean in (d_id_str, e_id_str) or 
+                f"-100{e_id_str}" == target_str or
+                (hasattr(d.entity, 'username') and d.entity.username and f"@{d.entity.username}".lower() == target_str.lower())):
+                print(f"[SERVICE] Successfully matched channel '{d.title}' in dialogs!", flush=True)
+                return d.entity
+    except Exception as e:
+        print(f"[SERVICE] Dialog fetch error: {e}", flush=True)
+
+    # 3. Direct entity lookup fallback
     try:
         return await client.get_entity(target)
     except Exception:
         pass
 
-    # 3. Try integer ID variations
     if isinstance(target, int):
         clean_id = int(str(target).replace("-100", ""))
-        for try_peer in [target, clean_id, PeerChannel(clean_id)]:
+        for try_peer in [clean_id, PeerChannel(clean_id)]:
             try:
                 return await client.get_entity(try_peer)
             except Exception:
                 pass
-
-    # 4. Search through all dialogs (forces Telethon entity cache population)
-    try:
-        dialogs = await client.get_dialogs()
-        for d in dialogs:
-            d_id_str = str(d.id)
-            target_str = str(target)
-            if (d_id_str == target_str or 
-                target_str in d_id_str or 
-                f"-100{getattr(d.entity, 'id', '')}" == target_str or
-                (hasattr(d.entity, 'username') and d.entity.username and f"@{d.entity.username}".lower() == target_str.lower())):
-                return d.entity
-    except Exception as e:
-        print(f"[SERVICE] Dialog search error: {e}", flush=True)
 
     return None
 
@@ -106,10 +117,10 @@ async def live_stream_listener_service():
         print(f"[SERVICE] Resolving target channel '{CHANNEL_TARGET}'...", flush=True)
         channel = await resolve_target_channel(client, CHANNEL_TARGET)
         if not channel:
-            err_msg = f"Channel '{CHANNEL_TARGET}' not found. Make sure the account @{me.username} is a member of the channel or set CHANNEL_ID to the channel @username or invite link."
+            err_msg = f"Channel '{CHANNEL_TARGET}' not found in dialogs. Make sure account @{me.username} has joined the channel, or set CHANNEL_ID to your private invite link (https://t.me/+...)"
             service_status["error_log"] = err_msg
-            print(f"[SERVICE] {err_msg} Retrying in 5s...", flush=True)
-            await asyncio.sleep(5)
+            print(f"[SERVICE] {err_msg} Retrying in 10s...", flush=True)
+            await asyncio.sleep(10)
 
     title = getattr(channel, 'title', str(CHANNEL_TARGET))
     service_status["current_channel"] = f"{title} ({channel.id})"
