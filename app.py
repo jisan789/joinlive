@@ -35,7 +35,7 @@ try:
 except ValueError:
     CHANNEL_TARGET = RAW_CHANNEL
 
-# Service State
+# Service State & Logs Buffer
 service_status = {
     "started_at": time.time(),
     "service_enabled": True,
@@ -45,8 +45,18 @@ service_status = {
     "last_live_detected": None,
     "last_joined": None,
     "total_pings_received": 0,
-    "error_log": None
+    "error_log": None,
+    "logs": []
 }
+
+def log_event(msg: str):
+    """Prints message and stores in in-memory logs buffer for web dashboard terminal."""
+    timestamp = time.strftime('%H:%M:%S')
+    formatted_msg = f"[{timestamp}] {msg}"
+    print(formatted_msg, flush=True)
+    service_status["logs"].append(formatted_msg)
+    if len(service_status["logs"]) > 80:
+        service_status["logs"].pop(0)
 
 listener_task = None
 telethon_client = None
@@ -91,20 +101,22 @@ async def resolve_target_channel(client, target):
 
 async def live_stream_listener_service():
     global telethon_client
-    print("[SERVICE] Starting Live Stream Listener Service...", flush=True)
+    log_event("Starting Live Stream Listener Service...")
     telethon_client = TelegramClient(StringSession(SESSION_KEY), API_ID, API_HASH)
     await telethon_client.start()
 
     me = await telethon_client.get_me()
-    print(f"[SERVICE] Logged in as: {me.first_name} (ID: {me.id})", flush=True)
+    log_event(f"Logged in as user: {me.first_name} (ID: {me.id})")
 
     # Resolve target channel
     channel = None
     while service_status["service_enabled"] and not channel:
+        log_event(f"Resolving target channel '{CHANNEL_TARGET}'...")
         channel = await resolve_target_channel(telethon_client, CHANNEL_TARGET)
         if not channel:
             err_msg = f"Channel '{CHANNEL_TARGET}' not found. Set CHANNEL_ID to invite link or join channel."
             service_status["error_log"] = err_msg
+            log_event(f"ERROR: {err_msg} Retrying in 5s...")
             await asyncio.sleep(5)
 
     if not channel or not service_status["service_enabled"]:
@@ -114,7 +126,7 @@ async def live_stream_listener_service():
     service_status["current_channel"] = f"{title} ({channel.id})"
     service_status["status"] = "monitoring"
     service_status["error_log"] = None
-    print(f"[SERVICE] Monitoring channel: '{title}' (ID: {channel.id})", flush=True)
+    log_event(f"Monitoring target channel: '{title}' (ID: {channel.id})")
 
     is_in_live = False
     current_call_id = None
@@ -178,7 +190,7 @@ async def live_stream_listener_service():
                 if not is_in_live or (current_call_id != active_call.id):
                     # Initial Join
                     service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                    print(f"[{time.strftime('%H:%M:%S')}] Live stream detected! Joining...", flush=True)
+                    log_event("Live stream detected! Joining instantly...")
 
                     current_call_id = active_call.id
                     success = await send_join_keep_alive(input_call, my_input_peer)
@@ -186,19 +198,16 @@ async def live_stream_listener_service():
                         is_in_live = True
                         service_status["is_in_live"] = True
                         service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream! Maintaining active session on '{title}'.", flush=True)
+                        log_event(f"SUCCESS: Joined live stream! Session active on '{title}'.")
                     else:
-                        print(f"[{time.strftime('%H:%M:%S')}] Failed to join. Retrying in 5s...", flush=True)
+                        log_event("WARNING: Failed to join live stream. Will retry...")
                 else:
                     # CONTINUOUS SESSION MAINTENANCE:
-                    # 1. Send CheckGroupCall ping every 5 seconds
                     try:
                         await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc or 0]))
                     except Exception:
                         pass
                     
-                    # 2. Every 15 seconds (every 3rd loop tick), send JoinGroupCallRequest keep-alive refresh
-                    # This prevents Telegram's WebRTC server from dropping silent participants!
                     loop_tick += 1
                     if loop_tick % 3 == 0:
                         await send_join_keep_alive(input_call, my_input_peer)
@@ -206,7 +215,7 @@ async def live_stream_listener_service():
             else:
                 # Live stream is NOT running
                 if is_in_live:
-                    print(f"[{time.strftime('%H:%M:%S')}] Live stream ENDED/CLOSED. Resetting state.", flush=True)
+                    log_event("Live stream ENDED/CLOSED. Resetting state.")
                     is_in_live = False
                     service_status["is_in_live"] = False
                     current_call_id = None
@@ -227,7 +236,7 @@ async def live_stream_listener_service():
     is_in_live = False
     service_status["is_in_live"] = False
     service_status["status"] = "stopped"
-    print("[SERVICE] Listener Service Stopped cleanly.", flush=True)
+    log_event("Listener Service stopped cleanly.")
 
 
 @asynccontextmanager
@@ -255,7 +264,8 @@ async def get_ping_status():
         "last_live_detected": service_status["last_live_detected"],
         "last_joined": service_status["last_joined"],
         "total_cron_pings": service_status["total_pings_received"],
-        "error_notice": service_status["error_log"]
+        "error_notice": service_status["error_log"],
+        "logs": service_status["logs"]
     }
 
 @app.post("/start")
@@ -265,6 +275,7 @@ async def start_service():
     if not service_status["service_enabled"]:
         service_status["service_enabled"] = True
         service_status["status"] = "starting"
+        log_event("User manually clicked START service.")
         listener_task = asyncio.create_task(live_stream_listener_service())
         return {"status": "ok", "message": "Service started successfully."}
     return {"status": "ok", "message": "Service is already running."}
@@ -276,6 +287,7 @@ async def stop_service():
     if service_status["service_enabled"]:
         service_status["service_enabled"] = False
         service_status["status"] = "stopping"
+        log_event("User manually clicked STOP service.")
         if listener_task:
             listener_task.cancel()
             listener_task = None
@@ -298,12 +310,12 @@ async def dashboard_ui():
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram Live Stream Manager</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', sans-serif;
-            background: #0f172a;
+            background: #090d16;
             color: #f8fafc;
             min-height: 100vh;
             display: flex;
@@ -313,13 +325,13 @@ async def dashboard_ui():
         }
         .container {
             width: 100%;
-            max-width: 650px;
-            background: rgba(30, 41, 59, 0.8);
-            backdrop-filter: blur(16px);
+            max-width: 750px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 24px;
             padding: 32px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
         }
         .header {
             display: flex;
@@ -348,15 +360,15 @@ async def dashboard_ui():
         
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
         .card {
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(10, 15, 29, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.05);
             padding: 18px;
             border-radius: 16px;
         }
-        .card-label { font-size: 12px; color: #94a3b8; font-weight: 500; text-transform: uppercase; margin-bottom: 6px; }
-        .card-value { font-size: 16px; font-weight: 600; color: #f1f5f9; word-break: break-word; }
+        .card-label { font-size: 11px; color: #94a3b8; font-weight: 500; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .card-value { font-size: 15px; font-weight: 600; color: #f1f5f9; word-break: break-word; }
 
-        .btn-group { display: flex; gap: 14px; margin-top: 10px; }
+        .btn-group { display: flex; gap: 14px; margin-bottom: 24px; }
         .btn {
             flex: 1;
             padding: 14px;
@@ -375,6 +387,44 @@ async def dashboard_ui():
         .btn-start:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); }
         .btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
         .btn-stop:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4); }
+
+        /* Terminal Console Styling */
+        .terminal-container {
+            background: #030712;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+        }
+        .terminal-header {
+            background: #111827;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .term-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .term-dot.red { background: #ef4444; }
+        .term-dot.yellow { background: #f59e0b; }
+        .term-dot.green { background: #10b981; }
+        .term-title { font-size: 12px; font-family: 'Fira Code', monospace; color: #94a3b8; margin-left: 8px; }
+        .terminal-body {
+            padding: 16px;
+            height: 220px;
+            overflow-y: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #38bdf8;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .log-entry { word-break: break-all; }
+        .log-success { color: #4ade80; }
+        .log-error { color: #f87171; }
+        .log-warn { color: #fbbf24; }
 
         .notice {
             margin-top: 20px;
@@ -427,12 +477,27 @@ async def dashboard_ui():
             </button>
         </div>
 
+        <!-- Terminal Console View -->
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <span class="term-dot red"></span>
+                <span class="term-dot yellow"></span>
+                <span class="term-dot green"></span>
+                <span class="term-title">terminal.log — Live Service Console</span>
+            </div>
+            <div id="terminalLog" class="terminal-body">
+                <div class="log-entry">Connecting to live console stream...</div>
+            </div>
+        </div>
+
         <div class="notice">
-            💡 <strong>Session Maintenance Active:</strong> Heartbeat refreshes automatically keep your user connected in the live stream without leaving.
+            💡 <strong>Live Terminal Active:</strong> Displays real-time logs and 15s session maintenance heartbeats directly from your server.
         </div>
     </div>
 
     <script>
+        let lastLogCount = 0;
+
         function updateUI() {
             fetch('/status')
                 .then(res => res.json())
@@ -457,6 +522,21 @@ async def dashboard_ui():
                         badge.innerHTML = '<span class="dot" style="background: #38bdf8;"></span> Monitoring';
                         liveStatus.innerText = '🔍 Waiting for Live Stream';
                     }
+
+                    // Render Terminal Logs
+                    if (data.logs && data.logs.length > 0) {
+                        const term = document.getElementById('terminalLog');
+                        term.innerHTML = data.logs.map(log => {
+                            let cls = 'log-entry';
+                            if (log.includes('SUCCESS') || log.includes('Joined')) cls += ' log-success';
+                            else if (log.includes('ERROR') || log.includes('Failed')) cls += ' log-error';
+                            else if (log.includes('WARNING') || log.includes('ENDED')) cls += ' log-warn';
+                            return `<div class="${cls}">${log}</div>`;
+                        }).join('');
+                        
+                        // Auto-scroll to bottom of terminal
+                        term.scrollTop = term.scrollHeight;
+                    }
                 })
                 .catch(err => console.error(err));
         }
@@ -466,7 +546,7 @@ async def dashboard_ui():
                 .then(() => updateUI());
         }
 
-        setInterval(updateUI, 3000);
+        setInterval(updateUI, 2500);
         updateUI();
     </script>
 </body>
