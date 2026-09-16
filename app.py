@@ -43,8 +43,7 @@ service_status = {
     "last_live_detected": None,
     "last_joined": None,
     "total_pings_received": 0,
-    "error_log": None,
-    "user_dialogs": []
+    "error_log": None
 }
 
 async def resolve_target_channel(client, target):
@@ -62,26 +61,23 @@ async def resolve_target_channel(client, target):
                 print(f"[SERVICE] Joined private channel '{updates.chats[0].title}' via invite link!", flush=True)
                 return updates.chats[0]
         except UserAlreadyParticipantError:
-            print(f"[SERVICE] Account is already a participant via invite link.", flush=True)
+            pass
         except Exception as e:
-            print(f"[SERVICE] Invite link import error: {e}", flush=True)
+            print(f"[SERVICE] Invite link import notice: {e}", flush=True)
 
     # 2. Fetch all dialogs to populate Telethon's RAM entity cache
     try:
-        print("[SERVICE] Pre-loading user dialogs...", flush=True)
         dialogs = await client.get_dialogs(limit=None)
         
         target_str = str(target)
         target_clean = target_str.replace("-100", "").strip()
 
-        available_dialogs = []
         for d in dialogs:
             d_id = getattr(d, 'id', 0)
             e_id = getattr(d.entity, 'id', 0)
             d_id_str = str(d_id)
             e_id_str = str(e_id)
             d_title = getattr(d, 'title', getattr(d.entity, 'first_name', 'Unknown'))
-            available_dialogs.append(f"{d_title} (ID: {d_id})")
 
             if (target_str in (d_id_str, e_id_str) or 
                 target_clean in (d_id_str, e_id_str) or 
@@ -89,11 +85,8 @@ async def resolve_target_channel(client, target):
                 (hasattr(d.entity, 'username') and d.entity.username and f"@{d.entity.username}".lower() == target_str.lower())):
                 print(f"[SERVICE] Successfully matched channel '{d_title}' in dialogs!", flush=True)
                 return d.entity
-
-        service_status["user_dialogs"] = available_dialogs
-        print(f"[SERVICE] Available dialogs on this account ({len(available_dialogs)}): {available_dialogs}", flush=True)
     except Exception as e:
-        print(f"[SERVICE] Dialog fetch error: {e}", flush=True)
+        print(f"[SERVICE] Dialog fetch notice: {e}", flush=True)
 
     # 3. Direct entity lookup fallback
     try:
@@ -233,7 +226,7 @@ async def live_stream_listener_service():
                     active_ssrc = None
 
         except Exception as e:
-            print(f"[SERVICE] Loop check error: {e}", flush=True)
+            print(f"[SERVICE] Loop check notice: {e}", flush=True)
 
         await asyncio.sleep(5)
 
@@ -260,7 +253,6 @@ async def root():
         "last_live_detected": service_status["last_live_detected"],
         "last_joined": service_status["last_joined"],
         "total_cron_pings": service_status["total_pings_received"],
-        "account_dialogs": service_status["user_dialogs"],
         "error_notice": service_status["error_log"]
     }
 
