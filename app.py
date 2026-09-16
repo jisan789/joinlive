@@ -9,10 +9,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.channels import GetFullChannelRequest, JoinChannelRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.functions.phone import JoinGroupCallRequest, CheckGroupCallRequest
 from telethon.tl.types import DataJSON, InputGroupCall, PeerChannel
-from telethon.errors import RPCError
+from telethon.errors import RPCError, UserAlreadyParticipantError
 
 # Ensure UTF-8 console output for logs
 if sys.stdout.encoding != 'utf-8':
@@ -21,22 +22,75 @@ if sys.stdout.encoding != 'utf-8':
     except AttributeError:
         pass
 
-# Environment Variables with default fallback credentials
+# Environment Variables
 API_ID = int(os.getenv("API_ID", "27634392"))
 API_HASH = os.getenv("API_HASH", "c29325ca5de227dc611e54d355f76896")
 SESSION_KEY = os.getenv("SESSION_KEY", "1BVtsOGwBuz8vHuPpNuD-zFio1ZhVeIl94gLKDOycaPwrM6mZLyrY8APMQGTSMjMmWw7nU1h8XEyLMybbcrfbhv1kDzvLyiiTu_dqCapqgtwSCD_p6pM0FKWD9Fdg9ZAkgNac0iN_DKa10ECnXSYpzpSOFdWePvDtsy1vGQzFRxT5xbJBF92Wja7w1sMRT8yflFLWWQOSYsMYVAn83ssCPAVGFyEklL5oNgjaxoMMvH7qxB_piEE8rvMws8CFbX2a6zKtF-s_-Tk6S7lsdoDOVuQOItHpclxOpoS36ZAVpH4xb64r5Hgfj5BUjnyMKspKRJ8K8SRY5Cu45Bu09F53nHGtvmi8tSY=")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003962785452"))
+
+# CHANNEL_ID can be integer ID (-1003962785452), @username, or invite link
+RAW_CHANNEL = os.getenv("CHANNEL_ID", "-1003962785452")
+
+try:
+    CHANNEL_TARGET = int(RAW_CHANNEL)
+except ValueError:
+    CHANNEL_TARGET = RAW_CHANNEL
 
 # Service State
 service_status = {
     "started_at": time.time(),
     "status": "initializing",
     "is_in_live": False,
-    "current_channel": str(CHANNEL_ID),
+    "current_channel": str(CHANNEL_TARGET),
     "last_live_detected": None,
     "last_joined": None,
-    "total_pings_received": 0
+    "total_pings_received": 0,
+    "error_log": None
 }
+
+async def resolve_target_channel(client, target):
+    """Resolves target channel via get_entity, invite link, username, or dialog cache."""
+    # 1. Check invite link (e.g., https://t.me/+abcxyz or https://t.me/joinchat/abcxyz)
+    if isinstance(target, str) and ("t.me/+" in target or "joinchat/" in target):
+        invite_hash = target.split("+")[-1].split("joinchat/")[-1].strip("/")
+        try:
+            updates = await client(ImportChatInviteRequest(invite_hash))
+            if hasattr(updates, 'chats') and updates.chats:
+                return updates.chats[0]
+        except UserAlreadyParticipantError:
+            pass
+        except Exception as e:
+            print(f"[SERVICE] Invite link import error: {e}", flush=True)
+
+    # 2. Try direct get_entity
+    try:
+        return await client.get_entity(target)
+    except Exception:
+        pass
+
+    # 3. Try integer ID variations
+    if isinstance(target, int):
+        clean_id = int(str(target).replace("-100", ""))
+        for try_peer in [target, clean_id, PeerChannel(clean_id)]:
+            try:
+                return await client.get_entity(try_peer)
+            except Exception:
+                pass
+
+    # 4. Search through all dialogs (forces Telethon entity cache population)
+    try:
+        dialogs = await client.get_dialogs()
+        for d in dialogs:
+            d_id_str = str(d.id)
+            target_str = str(target)
+            if (d_id_str == target_str or 
+                target_str in d_id_str or 
+                f"-100{getattr(d.entity, 'id', '')}" == target_str or
+                (hasattr(d.entity, 'username') and d.entity.username and f"@{d.entity.username}".lower() == target_str.lower())):
+                return d.entity
+    except Exception as e:
+        print(f"[SERVICE] Dialog search error: {e}", flush=True)
+
+    return None
 
 async def live_stream_listener_service():
     print("[SERVICE] Starting Live Stream Listener Service...", flush=True)
@@ -49,25 +103,19 @@ async def live_stream_listener_service():
     # Resolve target channel
     channel = None
     while not channel:
-        try:
-            channel = await client.get_entity(CHANNEL_ID)
-        except Exception:
-            try:
-                # Try raw positive channel peer ID if -100 prefix failed
-                clean_id = int(str(CHANNEL_ID).replace("-100", ""))
-                channel = await client.get_entity(PeerChannel(clean_id))
-            except Exception:
-                async for dialog in client.iter_dialogs():
-                    if dialog.id == CHANNEL_ID or str(dialog.id) == str(CHANNEL_ID) or f"-100{dialog.entity.id}" == str(CHANNEL_ID):
-                        channel = dialog.entity
-                        break
+        print(f"[SERVICE] Resolving target channel '{CHANNEL_TARGET}'...", flush=True)
+        channel = await resolve_target_channel(client, CHANNEL_TARGET)
         if not channel:
-            print(f"[SERVICE] Channel {CHANNEL_ID} not found. Retrying in 5s...", flush=True)
+            err_msg = f"Channel '{CHANNEL_TARGET}' not found. Make sure the account @{me.username} is a member of the channel or set CHANNEL_ID to the channel @username or invite link."
+            service_status["error_log"] = err_msg
+            print(f"[SERVICE] {err_msg} Retrying in 5s...", flush=True)
             await asyncio.sleep(5)
 
-    service_status["current_channel"] = f"{getattr(channel, 'title', 'Channel')} ({channel.id})"
+    title = getattr(channel, 'title', str(CHANNEL_TARGET))
+    service_status["current_channel"] = f"{title} ({channel.id})"
     service_status["status"] = "monitoring"
-    print(f"[SERVICE] Monitoring target channel: '{getattr(channel, 'title', 'Channel')}' (ID: {channel.id})", flush=True)
+    service_status["error_log"] = None
+    print(f"[SERVICE] Monitoring target channel: '{title}' (ID: {channel.id})", flush=True)
 
     is_in_live = False
     current_call_id = None
@@ -138,7 +186,7 @@ async def live_stream_listener_service():
                         service_status["is_in_live"] = True
                         service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                         ping_counter = 0
-                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream successfully! Active on '{getattr(channel, 'title', 'Channel')}'", flush=True)
+                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream successfully! Active on '{title}'", flush=True)
                     else:
                         print(f"[{time.strftime('%H:%M:%S')}] Failed to join live stream. Will retry...", flush=True)
                 else:
@@ -165,8 +213,8 @@ async def live_stream_listener_service():
                     input_call = None
                     active_ssrc = None
 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[SERVICE] Loop check error: {e}", flush=True)
 
         await asyncio.sleep(5)
 
@@ -192,7 +240,8 @@ async def root():
         "is_in_live": service_status["is_in_live"],
         "last_live_detected": service_status["last_live_detected"],
         "last_joined": service_status["last_joined"],
-        "total_cron_pings": service_status["total_pings_received"]
+        "total_cron_pings": service_status["total_pings_received"],
+        "error_notice": service_status["error_log"]
     }
 
 @app.get("/health")
