@@ -26,8 +26,6 @@ API_ID = int(os.getenv("API_ID", "27634392"))
 API_HASH = os.getenv("API_HASH", "c29325ca5de227dc611e54d355f76896")
 SESSION_KEY = os.getenv("SESSION_KEY", "1BVtsOGwBuz8vHuPpNuD-zFio1ZhVeIl94gLKDOycaPwrM6mZLyrY8APMQGTSMjMmWw7nU1h8XEyLMybbcrfbhv1kDzvLyiiTu_dqCapqgtwSCD_p6pM0FKWD9Fdg9ZAkgNac0iN_DKa10ECnXSYpzpSOFdWePvDtsy1vGQzFRxT5xbJBF92Wja7w1sMRT8yflFLWWQOSYsMYVAn83ssCPAVGFyEklL5oNgjaxoMMvH7qxB_piEE8rvMws8CFbX2a6zKtF-s_-Tk6S7lsdoDOVuQOItHpclxOpoS36ZAVpH4xb64r5Hgfj5BUjnyMKspKRJ8K8SRY5Cu45Bu09F53nHGtvmi8tSY=")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003962785452"))
-MIN_DELAY_SECONDS = int(os.getenv("MIN_DELAY_SECONDS", "30"))
-MAX_DELAY_SECONDS = int(os.getenv("MAX_DELAY_SECONDS", "180"))
 
 # Service State
 service_status = {
@@ -121,22 +119,11 @@ async def live_stream_listener_service():
             active_call = full_chat.call
 
             if active_call:
-                # Live stream is RUNNING
+                # Live stream is RUNNING -> Join Instantly!
                 if not is_in_live or (current_call_id != active_call.id):
-                    delay = random.randint(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS)
                     service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                    print(f"[{time.strftime('%H:%M:%S')}] Live stream detected! Waiting random delay of {delay}s before joining...", flush=True)
+                    print(f"[{time.strftime('%H:%M:%S')}] Live stream detected! Joining instantly...", flush=True)
 
-                    await asyncio.sleep(delay)
-
-                    # Re-verify live status
-                    full_chat_response = await client(GetFullChannelRequest(channel))
-                    if not full_chat_response.full_chat.call or full_chat_response.full_chat.call.id != active_call.id:
-                        print(f"[{time.strftime('%H:%M:%S')}] Live stream ended during delay period.", flush=True)
-                        await asyncio.sleep(5)
-                        continue
-
-                    print(f"[{time.strftime('%H:%M:%S')}] Joining live stream now...", flush=True)
                     input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
                     current_call_id = active_call.id
 
