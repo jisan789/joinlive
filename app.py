@@ -59,7 +59,25 @@ def log_event(msg: str):
         service_status["logs"].pop(0)
 
 listener_task = None
+self_ping_task = None
 telethon_client = None
+
+async def self_ping_loop():
+    """Automatic internal self-pinging background task to keep server awake on Render."""
+    await asyncio.sleep(15)
+    render_url = os.getenv("RENDER_EXTERNAL_URL")
+    log_event(f"Internal self-ping monitor started. App URL: {render_url or 'Local'}")
+    
+    while service_status["service_enabled"]:
+        try:
+            if render_url:
+                import urllib.request
+                ping_url = f"{render_url.rstrip('/')}/ping"
+                urllib.request.urlopen(ping_url, timeout=10)
+                log_event("Internal self-ping sent to keep server awake.")
+        except Exception as e:
+            pass
+        await asyncio.sleep(180) # Self-ping every 3 minutes automatically
 
 async def resolve_target_channel(client, target):
     """Resolves target channel by Invite Link, ID, Username, or Pre-loaded Dialogs."""
@@ -241,12 +259,15 @@ async def live_stream_listener_service():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global listener_task
+    global listener_task, self_ping_task
     listener_task = asyncio.create_task(live_stream_listener_service())
+    self_ping_task = asyncio.create_task(self_ping_loop())
     yield
     if listener_task:
         service_status["service_enabled"] = False
         listener_task.cancel()
+    if self_ping_task:
+        self_ping_task.cancel()
 
 app = FastAPI(title="LiveJoin Web Service", lifespan=lifespan)
 
@@ -388,7 +409,6 @@ async def dashboard_ui():
         .btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
         .btn-stop:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4); }
 
-        /* Terminal Console Styling */
         .terminal-container {
             background: #030712;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -463,7 +483,7 @@ async def dashboard_ui():
                 <div id="serverUptime" class="card-value">0s</div>
             </div>
             <div class="card">
-                <div class="card-label">Cron Heartbeats (/ping)</div>
+                <div class="card-label">Keep-Alive Heartbeats</div>
                 <div id="cronPings" class="card-value">0</div>
             </div>
         </div>
@@ -477,7 +497,6 @@ async def dashboard_ui():
             </button>
         </div>
 
-        <!-- Terminal Console View -->
         <div class="terminal-container">
             <div class="terminal-header">
                 <span class="term-dot red"></span>
@@ -491,13 +510,11 @@ async def dashboard_ui():
         </div>
 
         <div class="notice">
-            💡 <strong>Live Terminal Active:</strong> Displays real-time logs and 15s session maintenance heartbeats directly from your server.
+            ⚡ <strong>24/7 Always-On Active:</strong> Internal self-ping loop runs automatically. No browser tab or external cron required!
         </div>
     </div>
 
     <script>
-        let lastLogCount = 0;
-
         function updateUI() {
             fetch('/status')
                 .then(res => res.json())
@@ -523,7 +540,6 @@ async def dashboard_ui():
                         liveStatus.innerText = '🔍 Waiting for Live Stream';
                     }
 
-                    // Render Terminal Logs
                     if (data.logs && data.logs.length > 0) {
                         const term = document.getElementById('terminalLog');
                         term.innerHTML = data.logs.map(log => {
@@ -534,7 +550,6 @@ async def dashboard_ui():
                             return `<div class="${cls}">${log}</div>`;
                         }).join('');
                         
-                        // Auto-scroll to bottom of terminal
                         term.scrollTop = term.scrollHeight;
                     }
                 })
