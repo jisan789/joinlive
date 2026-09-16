@@ -233,9 +233,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LiveJoin Web Service", lifespan=lifespan)
 
 @app.get("/status")
-async def get_status():
+@app.get("/ping")
+async def get_ping_status():
+    service_status["total_pings_received"] += 1
     return {
-        "status": service_status["status"],
+        "status": "online",
+        "service": "Telegram Live Listener Service",
         "service_enabled": service_status["service_enabled"],
         "uptime_seconds": int(time.time() - service_status["started_at"]),
         "monitoring_channel": service_status["current_channel"],
@@ -271,7 +274,6 @@ async def stop_service():
         return {"status": "ok", "message": "Service stopped."}
     return {"status": "ok", "message": "Service is already stopped."}
 
-@app.get("/ping")
 @app.get("/health")
 async def ping_health():
     service_status["total_pings_received"] += 1
@@ -402,7 +404,7 @@ async def dashboard_ui():
                 <div id="serverUptime" class="card-value">0s</div>
             </div>
             <div class="card">
-                <div class="card-label">Keep-Alive Heartbeats</div>
+                <div class="card-label">Cron Heartbeats (/ping)</div>
                 <div id="cronPings" class="card-value">0</div>
             </div>
         </div>
@@ -417,7 +419,7 @@ async def dashboard_ui():
         </div>
 
         <div class="notice">
-            💡 <strong>Connection Persistence Active:</strong> Keeping this dashboard tab open keeps the session active in CPU/RAM and prevents leaving or re-joining the live stream.
+            💡 <strong>Cron Ping Target:</strong> Point your external 1-minute cron job to <code>https://YOUR-APP.onrender.com/ping</code> to keep Render awake.
         </div>
     </div>
 
@@ -455,7 +457,6 @@ async def dashboard_ui():
                 .then(() => updateUI());
         }
 
-        // Poll status every 3 seconds to keep session active
         setInterval(updateUI, 3000);
         updateUI();
     </script>
