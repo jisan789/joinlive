@@ -75,7 +75,7 @@ async def self_ping_loop():
                 ping_url = f"{render_url.rstrip('/')}/ping"
                 urllib.request.urlopen(ping_url, timeout=10)
                 log_event("Internal self-ping sent to keep server awake.")
-        except Exception as e:
+        except Exception:
             pass
         await asyncio.sleep(180) # Self-ping every 3 minutes automatically
 
@@ -100,7 +100,6 @@ async def resolve_target_channel(client, target):
         for d in dialogs:
             d_id_str = str(getattr(d, 'id', 0))
             e_id_str = str(getattr(d.entity, 'id', 0))
-            d_title = getattr(d, 'title', getattr(d.entity, 'first_name', 'Unknown'))
 
             if (target_str in (d_id_str, e_id_str) or 
                 target_clean in (d_id_str, e_id_str) or 
@@ -151,10 +150,10 @@ async def live_stream_listener_service():
     input_call = None
     active_ssrc = None
 
-    async def send_join_keep_alive(input_c, my_peer, ssrc_override=None):
+    async def join_live_once(input_c, my_peer):
         nonlocal active_ssrc
-        ssrc = ssrc_override or active_ssrc or random.randint(100000, 999999999)
-        for _ in range(5):
+        for _ in range(10):
+            ssrc = random.randint(100000, 999999999)
             webrtc_json = {
                 "transport": {
                     "fingerprints": [
@@ -182,7 +181,6 @@ async def live_stream_listener_service():
                 return True
             except RPCError as e:
                 if "SSRC" in str(e).upper():
-                    ssrc = random.randint(100000, 999999999)
                     await asyncio.sleep(0.5)
                     continue
                 else:
@@ -192,7 +190,6 @@ async def live_stream_listener_service():
         return False
 
     my_input_peer = await telethon_client.get_input_entity("me")
-    loop_tick = 0
 
     # Service Loop
     while service_status["service_enabled"]:
@@ -206,29 +203,26 @@ async def live_stream_listener_service():
                 input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
                 
                 if not is_in_live or (current_call_id != active_call.id):
-                    # Initial Join
+                    # Join EXACTLY ONCE when stream starts
                     service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                    log_event("Live stream detected! Joining instantly...")
+                    log_event("Live stream detected! Joining once...")
 
                     current_call_id = active_call.id
-                    success = await send_join_keep_alive(input_call, my_input_peer)
+                    success = await join_live_once(input_call, my_input_peer)
                     if success:
                         is_in_live = True
                         service_status["is_in_live"] = True
                         service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                        log_event(f"SUCCESS: Joined live stream! Session active on '{title}'.")
+                        log_event(f"SUCCESS: Joined live stream! Staying in stream without rejoining on '{title}'.")
                     else:
-                        log_event("WARNING: Failed to join live stream. Will retry...")
+                        log_event("WARNING: Failed to join live stream. Will retry in 5s...")
                 else:
-                    # CONTINUOUS SESSION MAINTENANCE:
+                    # SILENT HEARTBEAT PING (No JoinGroupCallRequest re-sends)
+                    # Sends CheckGroupCallRequest every 5s to keep session active silently without broadcasting rejoin events!
                     try:
                         await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc or 0]))
                     except Exception:
                         pass
-                    
-                    loop_tick += 1
-                    if loop_tick % 3 == 0:
-                        await send_join_keep_alive(input_call, my_input_peer)
 
             else:
                 # Live stream is NOT running
@@ -240,7 +234,7 @@ async def live_stream_listener_service():
                     input_call = None
                     active_ssrc = None
 
-        except Exception as e:
+        except Exception:
             pass
 
         await asyncio.sleep(5)
@@ -483,7 +477,7 @@ async def dashboard_ui():
                 <div id="serverUptime" class="card-value">0s</div>
             </div>
             <div class="card">
-                <div class="card-label">Keep-Alive Heartbeats</div>
+                <div class="card-label">Cron Heartbeats (/ping)</div>
                 <div id="cronPings" class="card-value">0</div>
             </div>
         </div>
@@ -510,7 +504,7 @@ async def dashboard_ui():
         </div>
 
         <div class="notice">
-            ⚡ <strong>24/7 Always-On Active:</strong> Internal self-ping loop runs automatically. No browser tab or external cron required!
+            ⚡ <strong>Single-Join Silent Session Active:</strong> Joins exactly once on stream start. Silent CheckGroupCall pings keep the user in the live stream without any rejoin notifications!
         </div>
     </div>
 
