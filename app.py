@@ -121,10 +121,10 @@ async def live_stream_listener_service():
     input_call = None
     active_ssrc = None
 
-    async def join_call_once(input_c, my_peer):
+    async def send_join_keep_alive(input_c, my_peer, ssrc_override=None):
         nonlocal active_ssrc
-        for _ in range(10):
-            ssrc = random.randint(100000, 999999999)
+        ssrc = ssrc_override or active_ssrc or random.randint(100000, 999999999)
+        for _ in range(5):
             webrtc_json = {
                 "transport": {
                     "fingerprints": [
@@ -152,6 +152,7 @@ async def live_stream_listener_service():
                 return True
             except RPCError as e:
                 if "SSRC" in str(e).upper():
+                    ssrc = random.randint(100000, 999999999)
                     await asyncio.sleep(0.5)
                     continue
                 else:
@@ -161,6 +162,7 @@ async def live_stream_listener_service():
         return False
 
     my_input_peer = await telethon_client.get_input_entity("me")
+    loop_tick = 0
 
     # Service Loop
     while service_status["service_enabled"]:
@@ -171,33 +173,40 @@ async def live_stream_listener_service():
 
             if active_call:
                 # Live stream is RUNNING
+                input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
+                
                 if not is_in_live or (current_call_id != active_call.id):
-                    # Join ONLY ONCE when stream starts!
+                    # Initial Join
                     service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                     print(f"[{time.strftime('%H:%M:%S')}] Live stream detected! Joining...", flush=True)
 
-                    input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
                     current_call_id = active_call.id
-
-                    success = await join_call_once(input_call, my_input_peer)
+                    success = await send_join_keep_alive(input_call, my_input_peer)
                     if success:
                         is_in_live = True
                         service_status["is_in_live"] = True
                         service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream successfully! Staying connected on '{title}'.", flush=True)
+                        print(f"[{time.strftime('%H:%M:%S')}] Joined live stream! Maintaining active session on '{title}'.", flush=True)
                     else:
                         print(f"[{time.strftime('%H:%M:%S')}] Failed to join. Retrying in 5s...", flush=True)
                 else:
-                    # STAY IN LIVE STREAM WITHOUT RE-JOINING!
-                    # Only send 10s heartbeat check to keep connection alive
+                    # CONTINUOUS SESSION MAINTENANCE:
+                    # 1. Send CheckGroupCall ping every 5 seconds
                     try:
-                        await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc]))
+                        await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc or 0]))
                     except Exception:
                         pass
+                    
+                    # 2. Every 15 seconds (every 3rd loop tick), send JoinGroupCallRequest keep-alive refresh
+                    # This prevents Telegram's WebRTC server from dropping silent participants!
+                    loop_tick += 1
+                    if loop_tick % 3 == 0:
+                        await send_join_keep_alive(input_call, my_input_peer)
+
             else:
                 # Live stream is NOT running
                 if is_in_live:
-                    print(f"[{time.strftime('%H:%M:%S')}] Live stream ENDED/CLOSED. Reset state.", flush=True)
+                    print(f"[{time.strftime('%H:%M:%S')}] Live stream ENDED/CLOSED. Resetting state.", flush=True)
                     is_in_live = False
                     service_status["is_in_live"] = False
                     current_call_id = None
@@ -419,7 +428,7 @@ async def dashboard_ui():
         </div>
 
         <div class="notice">
-            💡 <strong>Cron Ping Target:</strong> Point your external 1-minute cron job to <code>https://YOUR-APP.onrender.com/ping</code> to keep Render awake.
+            💡 <strong>Session Maintenance Active:</strong> Heartbeat refreshes automatically keep your user connected in the live stream without leaving.
         </div>
     </div>
 
@@ -442,7 +451,7 @@ async def dashboard_ui():
                     } else if (data.is_in_live) {
                         badge.className = 'live-badge badge-live';
                         badge.innerHTML = '<span class="dot" style="background: #4ade80;"></span> Active In Live';
-                        liveStatus.innerText = '🟢 Inside Live Stream (No Rejoin)';
+                        liveStatus.innerText = '🟢 Inside Live Stream (Connected)';
                     } else {
                         badge.className = 'live-badge badge-monitoring';
                         badge.innerHTML = '<span class="dot" style="background: #38bdf8;"></span> Monitoring';
