@@ -21,6 +21,12 @@ from telethon.tl.functions.phone import JoinGroupCallRequest, CheckGroupCallRequ
 from telethon.tl.types import DataJSON, InputGroupCall, PeerChannel, GroupCall, GroupCallDiscarded
 from telethon.errors import RPCError, UserAlreadyParticipantError
 
+try:
+    from ntgcalls import NTgCalls
+    HAS_NTGCALLS = True
+except ImportError:
+    HAS_NTGCALLS = False
+
 # Ensure UTF-8 console output for logs
 if sys.stdout.encoding != 'utf-8':
     try:
@@ -75,7 +81,7 @@ def build_stun_binding_request(server_ufrag: str, client_ufrag: str, server_pwd:
     
     # 2. PRIORITY attribute (0x0024)
     priority_attr = struct.pack("!HHI", 0x0024, 4, 1845494271)
-    
+     
     # 3. ICE-CONTROLLING (0x802a)
     controlling_attr = struct.pack("!HH", 0x802a, 8) + os.urandom(8)
     attrs = username_attr + priority_attr + controlling_attr
@@ -185,11 +191,7 @@ async def live_stream_listener_service():
     current_call_id = None
     input_call = None
     active_ssrc = None
-    udp_socket = None
-    udp_target = None
-    server_ufrag = None
-    server_pwd = None
-    client_ufrag = None
+    ntg_instance = None
     last_full_check = 0
 
     my_input_peer = await telethon_client.get_input_entity("me")
@@ -205,71 +207,72 @@ async def live_stream_listener_service():
                     active_call = getattr(full_chat, 'call', None)
 
                     if active_call and getattr(active_call, 'id', 0) != 0:
-                        # Active live stream detected -> JOIN EXACTLY ONCE!
+                        # Active live stream detected -> JOIN ONCE & MAINTAIN WEBRTC SESSION
                         service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                        log_event("Live stream detected! Joining once and establishing persistent session...")
+                        log_event("Live stream detected! Joining and establishing persistent WebRTC session...")
 
                         input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
                         current_call_id = active_call.id
-                        active_ssrc = random.randint(100000, 999999999)
-                        client_ufrag = f"ufrag{active_ssrc}"
-                        client_pwd = f"pwd{active_ssrc}12345678"
+                        chat_id = active_call.id
 
-                        webrtc_json = {
-                            "transport": {
-                                "fingerprints": [
-                                    {
-                                        "hash": "sha-256",
-                                        "setup": "actpass",
-                                        "fingerprint": "00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"
-                                    }
-                                ],
-                                "candidates": [],
-                                "ufrag": client_ufrag,
-                                "pwd": client_pwd
-                            },
-                            "ssrc": active_ssrc
-                        }
+                        join_payload = None
+                        if HAS_NTGCALLS:
+                            try:
+                                ntg_instance = NTgCalls()
+                                raw_payload = await ntg_instance.create_call(chat_id)
+                                payload_data = json.loads(raw_payload)
+                                raw_ssrc = payload_data.get("ssrc", random.randint(100000, 2147483647))
+                                active_ssrc = raw_ssrc if raw_ssrc <= 2147483647 else raw_ssrc - (1 << 32)
+                                join_payload = raw_payload
+                            except Exception as e:
+                                log_event(f"NTgCalls payload notice: {e}")
+                                ntg_instance = None
+
+                        if not join_payload:
+                            raw_ssrc = random.randint(100000, 2147483647)
+                            active_ssrc = raw_ssrc if raw_ssrc <= 2147483647 else raw_ssrc - (1 << 32)
+                            client_ufrag = f"ufrag{raw_ssrc}"
+                            client_pwd = f"pwd{raw_ssrc}12345678"
+                            webrtc_json = {
+                                "transport": {
+                                    "fingerprints": [
+                                        {
+                                            "hash": "sha-256",
+                                            "setup": "passive",
+                                            "fingerprint": "00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"
+                                        }
+                                    ],
+                                    "candidates": [],
+                                    "ufrag": client_ufrag,
+                                    "pwd": client_pwd
+                                },
+                                "ssrc": raw_ssrc
+                            }
+                            join_payload = json.dumps(webrtc_json)
 
                         res = await telethon_client(JoinGroupCallRequest(
                             call=input_call,
                             join_as=my_input_peer,
                             muted=True,
                             video_stopped=True,
-                            params=DataJSON(data=json.dumps(webrtc_json))
+                            params=DataJSON(data=join_payload)
                         ))
 
-                        # Parse WebRTC Gateway IP & credentials
-                        server_ufrag = None
-                        server_pwd = None
-                        udp_target = None
-
+                        server_params_str = None
                         updates_list = getattr(res, "updates", []) if hasattr(res, "updates") else []
                         for u in updates_list:
                             if hasattr(u, "params"):
-                                s_params = json.loads(u.params.data)
-                                s_trans = s_params.get("transport", {})
-                                server_ufrag = s_trans.get("ufrag")
-                                server_pwd = s_trans.get("pwd")
-                                for c in s_trans.get("candidates", []):
-                                    if c.get("protocol") == "udp" and "." in c.get("ip", ""):
-                                        udp_target = (c["ip"], int(c["port"]))
-                                        break
+                                server_params_str = u.params.data
                                 break
 
-                        if udp_socket:
+                        if ntg_instance and server_params_str:
                             try:
-                                udp_socket.close()
-                            except Exception:
-                                pass
-                            udp_socket = None
-
-                        if udp_target and server_ufrag and server_pwd:
-                            udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                            udp_socket.setblocking(False)
-                            log_event(f"SUCCESS: Joined live! WebRTC Gateway at {udp_target[0]}:{udp_target[1]}. Maintaining session continuously without rejoining.")
+                                await ntg_instance.connect(chat_id, server_params_str, False)
+                                log_event("SUCCESS: Joined live! Native WebRTC Gateway connected. Staying in stream continuously without drops or rejoining.")
+                            except Exception as e:
+                                log_event(f"NTgCalls connect notice: {e}")
                         else:
-                            log_event("SUCCESS: Joined live stream! Maintaining MTProto heartbeat session without rejoining.")
+                            log_event("SUCCESS: Joined live stream! Maintaining MTProto keepalive session.")
 
                         is_in_live = True
                         service_status["is_in_live"] = True
@@ -284,22 +287,10 @@ async def live_stream_listener_service():
 
             else:
                 # STATE 2: ACTIVE IN LIVE STREAM
-                # Continuous Heartbeat & STUN Maintenance (STAY IN STREAM, NEVER REJOIN)
+                # Continuous Heartbeat Maintenance (STAY IN STREAM, NEVER REJOIN)
                 stream_ended = False
 
-                # 1. Send STUN Binding Keep-Alive every ~3s if gateway endpoint available
-                if udp_socket and udp_target and server_ufrag and server_pwd and client_ufrag:
-                    try:
-                        stun_pkt = build_stun_binding_request(server_ufrag, client_ufrag, server_pwd)
-                        udp_socket.sendto(stun_pkt, udp_target)
-                        try:
-                            udp_socket.recvfrom(2048)
-                        except BlockingIOError:
-                            pass
-                    except Exception:
-                        pass
-
-                # 2. Send MTProto CheckGroupCallRequest every 3.5 seconds (official recommendation is 4s)
+                # 1. MTProto CheckGroupCallRequest keepalive every 4.0 seconds
                 try:
                     await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc]))
                 except RPCError as rpc_err:
@@ -313,7 +304,7 @@ async def live_stream_listener_service():
                 except Exception:
                     pass
 
-                # 3. Periodically check full channel state every 30s as a background check (NOT every 2.5s)
+                # 2. Periodically check full channel state every 30s as a background check
                 if not stream_ended and (time.time() - last_full_check >= 30):
                     last_full_check = time.time()
                     try:
@@ -326,12 +317,12 @@ async def live_stream_listener_service():
                         pass
 
                 if stream_ended:
-                    if udp_socket:
+                    if ntg_instance:
                         try:
-                            udp_socket.close()
+                            await ntg_instance.stop(chat_id)
                         except Exception:
                             pass
-                        udp_socket = None
+                        ntg_instance = None
                     is_in_live = False
                     service_status["is_in_live"] = False
                     current_call_id = None
@@ -339,18 +330,20 @@ async def live_stream_listener_service():
                     active_ssrc = None
                     continue
 
-                # Sleep 3.0s between heartbeat cycles
-                await asyncio.sleep(3.0)
+                # Sleep 4.0s between heartbeat cycles
+                await asyncio.sleep(4.0)
 
         except Exception:
-            await asyncio.sleep(3.0)
+            await asyncio.sleep(4.0)
 
     # Cleanup when service disabled
-    if udp_socket:
+    if ntg_instance and current_call_id:
         try:
-            udp_socket.close()
+            await ntg_instance.stop(current_call_id)
         except Exception:
             pass
+        ntg_instance = None
+
     if is_in_live and input_call:
         try:
             await telethon_client(LeaveGroupCallRequest(call=input_call, source=active_ssrc or 0))
