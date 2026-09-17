@@ -76,9 +76,9 @@ def build_stun_binding_request(server_ufrag: str, client_ufrag: str, server_pwd:
     # 2. PRIORITY attribute (0x0024)
     priority_attr = struct.pack("!HHI", 0x0024, 4, 1845494271)
     
-    # 3. ICE-CONTROLLED (0x8029) - client acts as controlled agent to Telegram SFU
-    controlled_attr = struct.pack("!HH", 0x8029, 8) + os.urandom(8)
-    attrs = username_attr + priority_attr + controlled_attr
+    # 3. ICE-CONTROLLING (0x802a)
+    controlling_attr = struct.pack("!HH", 0x802a, 8) + os.urandom(8)
+    attrs = username_attr + priority_attr + controlling_attr
     
     # 4. MESSAGE-INTEGRITY attribute (0x0008)
     header_for_hmac = struct.pack("!HH", 0x0001, len(attrs) + 24) + magic_cookie + trans_id
@@ -204,7 +204,7 @@ async def live_stream_listener_service():
                     full_chat = full_chat_response.full_chat
                     active_call = getattr(full_chat, 'call', None)
 
-                    if isinstance(active_call, GroupCall):
+                    if active_call and getattr(active_call, 'id', 0) != 0:
                         # Active live stream detected -> JOIN EXACTLY ONCE!
                         service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                         log_event("Live stream detected! Joining once and establishing persistent session...")
@@ -244,7 +244,8 @@ async def live_stream_listener_service():
                         server_pwd = None
                         udp_target = None
 
-                        for u in res.updates:
+                        updates_list = getattr(res, "updates", []) if hasattr(res, "updates") else []
+                        for u in updates_list:
                             if hasattr(u, "params"):
                                 s_params = json.loads(u.params.data)
                                 s_trans = s_params.get("transport", {})
@@ -268,7 +269,7 @@ async def live_stream_listener_service():
                             udp_socket.setblocking(False)
                             log_event(f"SUCCESS: Joined live! WebRTC Gateway at {udp_target[0]}:{udp_target[1]}. Maintaining session continuously without rejoining.")
                         else:
-                            log_event("SUCCESS: Joined live stream! Maintaining MTProto heartbeat session.")
+                            log_event("SUCCESS: Joined live stream! Maintaining MTProto heartbeat session without rejoining.")
 
                         is_in_live = True
                         service_status["is_in_live"] = True
@@ -318,7 +319,7 @@ async def live_stream_listener_service():
                     try:
                         fc = await telethon_client(GetFullChannelRequest(channel))
                         call_obj = getattr(fc.full_chat, 'call', None)
-                        if not isinstance(call_obj, GroupCall) or call_obj.id != current_call_id:
+                        if not call_obj or getattr(call_obj, 'id', None) != current_call_id:
                             log_event("Live stream ended or changed. Returning to monitoring.")
                             stream_ended = True
                     except Exception:
