@@ -18,7 +18,7 @@ from telethon.sessions import StringSession
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.functions.phone import JoinGroupCallRequest, CheckGroupCallRequest, LeaveGroupCallRequest
-from telethon.tl.types import DataJSON, InputGroupCall, PeerChannel
+from telethon.tl.types import DataJSON, InputGroupCall, PeerChannel, GroupCall, GroupCallDiscarded
 from telethon.errors import RPCError, UserAlreadyParticipantError
 
 # Ensure UTF-8 console output for logs
@@ -76,9 +76,9 @@ def build_stun_binding_request(server_ufrag: str, client_ufrag: str, server_pwd:
     # 2. PRIORITY attribute (0x0024)
     priority_attr = struct.pack("!HHI", 0x0024, 4, 1845494271)
     
-    # 3. ICE-CONTROLLING (0x802a)
-    controlling_attr = struct.pack("!HH", 0x802a, 8) + os.urandom(8)
-    attrs = username_attr + priority_attr + controlling_attr
+    # 3. ICE-CONTROLLED (0x8029) - client acts as controlled agent to Telegram SFU
+    controlled_attr = struct.pack("!HH", 0x8029, 8) + os.urandom(8)
+    attrs = username_attr + priority_attr + controlled_attr
     
     # 4. MESSAGE-INTEGRITY attribute (0x0008)
     header_for_hmac = struct.pack("!HH", 0x0001, len(attrs) + 24) + magic_cookie + trans_id
@@ -190,48 +190,47 @@ async def live_stream_listener_service():
     server_ufrag = None
     server_pwd = None
     client_ufrag = None
-    last_mtproto_ping = 0
+    last_full_check = 0
 
     my_input_peer = await telethon_client.get_input_entity("me")
 
     # Service Loop
     while service_status["service_enabled"]:
         try:
-            full_chat_response = await telethon_client(GetFullChannelRequest(channel))
-            full_chat = full_chat_response.full_chat
-            active_call = full_chat.call
+            if not is_in_live:
+                # STATE 1: MONITORING (Waiting for a live stream to start)
+                try:
+                    full_chat_response = await telethon_client(GetFullChannelRequest(channel))
+                    full_chat = full_chat_response.full_chat
+                    active_call = getattr(full_chat, 'call', None)
 
-            if active_call:
-                # Live stream is RUNNING
-                input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
-                
-                if not is_in_live or (current_call_id != active_call.id):
-                    # Initial Join
-                    service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                    log_event("Live stream detected! Joining once and establishing WebRTC...")
+                    if isinstance(active_call, GroupCall):
+                        # Active live stream detected -> JOIN EXACTLY ONCE!
+                        service_status["last_live_detected"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                        log_event("Live stream detected! Joining once and establishing persistent session...")
 
-                    current_call_id = active_call.id
-                    active_ssrc = random.randint(100000, 999999999)
-                    client_ufrag = f"ufrag{active_ssrc}"
-                    client_pwd = f"pwd{active_ssrc}12345678"
+                        input_call = InputGroupCall(id=active_call.id, access_hash=active_call.access_hash)
+                        current_call_id = active_call.id
+                        active_ssrc = random.randint(100000, 999999999)
+                        client_ufrag = f"ufrag{active_ssrc}"
+                        client_pwd = f"pwd{active_ssrc}12345678"
 
-                    webrtc_json = {
-                        "transport": {
-                            "fingerprints": [
-                                {
-                                    "hash": "sha-256",
-                                    "setup": "actpass",
-                                    "fingerprint": "00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"
-                                }
-                            ],
-                            "candidates": [],
-                            "ufrag": client_ufrag,
-                            "pwd": client_pwd
-                        },
-                        "ssrc": active_ssrc
-                    }
+                        webrtc_json = {
+                            "transport": {
+                                "fingerprints": [
+                                    {
+                                        "hash": "sha-256",
+                                        "setup": "actpass",
+                                        "fingerprint": "00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF"
+                                    }
+                                ],
+                                "candidates": [],
+                                "ufrag": client_ufrag,
+                                "pwd": client_pwd
+                            },
+                            "ssrc": active_ssrc
+                        }
 
-                    try:
                         res = await telethon_client(JoinGroupCallRequest(
                             call=input_call,
                             join_as=my_input_peer,
@@ -257,51 +256,75 @@ async def live_stream_listener_service():
                                         break
                                 break
 
+                        if udp_socket:
+                            try:
+                                udp_socket.close()
+                            except Exception:
+                                pass
+                            udp_socket = None
+
                         if udp_target and server_ufrag and server_pwd:
-                            if udp_socket:
-                                try:
-                                    udp_socket.close()
-                                except Exception:
-                                    pass
                             udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                             udp_socket.setblocking(False)
-
-                            is_in_live = True
-                            service_status["is_in_live"] = True
-                            service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                            log_event(f"SUCCESS: Joined live! WebRTC Gateway connected at {udp_target[0]}:{udp_target[1]}. Staying connected permanently without rejoining.")
+                            log_event(f"SUCCESS: Joined live! WebRTC Gateway at {udp_target[0]}:{udp_target[1]}. Maintaining session continuously without rejoining.")
                         else:
-                            log_event("WARNING: Could not resolve WebRTC Gateway credentials. Retrying...")
-                    except Exception as ex:
-                        log_event(f"Join error: {ex}")
+                            log_event("SUCCESS: Joined live stream! Maintaining MTProto heartbeat session.")
 
-                else:
-                    # ACTIVE CONNECTION MAINTENANCE (WebRTC STUN + MTProto Check):
-                    # 1. Send STUN Binding Request to Telegram WebRTC Gateway
-                    if udp_socket and udp_target and server_ufrag and server_pwd and client_ufrag:
-                        try:
-                            stun_pkt = build_stun_binding_request(server_ufrag, client_ufrag, server_pwd)
-                            udp_socket.sendto(stun_pkt, udp_target)
-                            # Drain incoming STUN 0x0101 responses
-                            try:
-                                udp_socket.recvfrom(2048)
-                            except BlockingIOError:
-                                pass
-                        except Exception:
-                            pass
+                        is_in_live = True
+                        service_status["is_in_live"] = True
+                        service_status["last_joined"] = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                        last_full_check = time.time()
+                except RPCError as ex:
+                    log_event(f"Monitoring notice: {ex}")
+                except Exception as ex:
+                    log_event(f"Monitoring notice: {ex}")
 
-                    # 2. Send MTProto CheckGroupCallRequest every 10 seconds
-                    if time.time() - last_mtproto_ping >= 10:
-                        try:
-                            await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc or 0]))
-                        except Exception:
-                            pass
-                        last_mtproto_ping = time.time()
+                await asyncio.sleep(5)
 
             else:
-                # Live stream is NOT running
-                if is_in_live:
-                    log_event("Live stream ENDED/CLOSED. Left stream.")
+                # STATE 2: ACTIVE IN LIVE STREAM
+                # Continuous Heartbeat & STUN Maintenance (STAY IN STREAM, NEVER REJOIN)
+                stream_ended = False
+
+                # 1. Send STUN Binding Keep-Alive every ~3s if gateway endpoint available
+                if udp_socket and udp_target and server_ufrag and server_pwd and client_ufrag:
+                    try:
+                        stun_pkt = build_stun_binding_request(server_ufrag, client_ufrag, server_pwd)
+                        udp_socket.sendto(stun_pkt, udp_target)
+                        try:
+                            udp_socket.recvfrom(2048)
+                        except BlockingIOError:
+                            pass
+                    except Exception:
+                        pass
+
+                # 2. Send MTProto CheckGroupCallRequest every 3.5 seconds (official recommendation is 4s)
+                try:
+                    await telethon_client(CheckGroupCallRequest(call=input_call, sources=[active_ssrc]))
+                except RPCError as rpc_err:
+                    err_str = str(rpc_err).upper()
+                    if any(w in err_str for w in ("DISCARDED", "INVALID", "CLOSED")):
+                        log_event(f"Live stream ended ({rpc_err}). Returning to monitoring.")
+                        stream_ended = True
+                    elif any(w in err_str for w in ("FORBIDDEN", "JOIN_MISSING")):
+                        log_event("Live session expired on server. Resetting to reconnect cleanly.")
+                        stream_ended = True
+                except Exception:
+                    pass
+
+                # 3. Periodically check full channel state every 30s as a background check (NOT every 2.5s)
+                if not stream_ended and (time.time() - last_full_check >= 30):
+                    last_full_check = time.time()
+                    try:
+                        fc = await telethon_client(GetFullChannelRequest(channel))
+                        call_obj = getattr(fc.full_chat, 'call', None)
+                        if not isinstance(call_obj, GroupCall) or call_obj.id != current_call_id:
+                            log_event("Live stream ended or changed. Returning to monitoring.")
+                            stream_ended = True
+                    except Exception:
+                        pass
+
+                if stream_ended:
                     if udp_socket:
                         try:
                             udp_socket.close()
@@ -313,12 +336,13 @@ async def live_stream_listener_service():
                     current_call_id = None
                     input_call = None
                     active_ssrc = None
+                    continue
 
-        except Exception as e:
-            pass
+                # Sleep 3.0s between heartbeat cycles
+                await asyncio.sleep(3.0)
 
-        # Send STUN keep-alives every 2.5 seconds to keep WebRTC gateway connection active
-        await asyncio.sleep(2.5)
+        except Exception:
+            await asyncio.sleep(3.0)
 
     # Cleanup when service disabled
     if udp_socket:
