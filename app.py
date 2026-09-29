@@ -26,9 +26,9 @@ WEB_PORT = int(os.environ.get("PORT", 8000))
 STREAM_TCP_PORT = int(os.environ.get("STREAM_TCP_PORT", 9988))
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
 
-# Random Delay Configuration (2 to 6 minutes default per account)
-MIN_JOIN_DELAY_SECONDS = int(os.environ.get("MIN_JOIN_DELAY_SECONDS", 120))  # 2 minutes
-MAX_JOIN_DELAY_SECONDS = int(os.environ.get("MAX_JOIN_DELAY_SECONDS", 360))  # 6 minutes
+# Random Delay Configuration (90s to 180s / 1.5 to 3 minutes default per account)
+MIN_JOIN_DELAY_SECONDS = int(os.environ.get("MIN_JOIN_DELAY_SECONDS", 90))  # 90 seconds (1.5 min)
+MAX_JOIN_DELAY_SECONDS = int(os.environ.get("MAX_JOIN_DELAY_SECONDS", 180))  # 180 seconds (3 min)
 
 # 4 Configured Accounts (Account 1 is the Master Audio Streamer, 2-4 join alongside)
 ACCOUNTS_CONFIG = [
@@ -261,7 +261,7 @@ async def join_account_call(acc: AccountState):
 
 
 async def schedule_account_join(acc: AccountState, delay_seconds: float):
-    """Waits for the randomized 2-6 minute delay before joining."""
+    """Waits for the randomized 90s-180s (1.5-3 min) delay before joining."""
     acc.scheduled_join_time = time.time() + delay_seconds
     mins = int(delay_seconds // 60)
     secs = int(delay_seconds % 60)
@@ -283,7 +283,7 @@ async def schedule_account_join(acc: AccountState, delay_seconds: float):
 
 
 def trigger_delayed_joins():
-    """Schedules independent 2-6 minute random delays for each unjoined account."""
+    """Schedules independent 90s-180s (1.5-3 min) random delays for each unjoined account."""
     for acc in state.accounts:
         if not acc.is_joined and (acc.join_task is None or acc.join_task.done()):
             delay = random.uniform(MIN_JOIN_DELAY_SECONDS, MAX_JOIN_DELAY_SECONDS)
@@ -343,8 +343,8 @@ async def leave_live_call():
 
 
 async def auto_join_monitor_loop():
-    """Resilient internal loop that continuously monitors the channel, auto-schedules random 2-6 min delayed joins, and heals drops."""
-    state.add_log(f"Internal 4-account auto-join loop engaged (Random Delay: {MIN_JOIN_DELAY_SECONDS//60}-{MAX_JOIN_DELAY_SECONDS//60} min).")
+    """Resilient internal loop that continuously monitors the channel, auto-schedules random 90s-180s delayed joins, and heals drops."""
+    state.add_log(f"Internal 4-account auto-join loop engaged (Random Delay: {MIN_JOIN_DELAY_SECONDS}s-{MAX_JOIN_DELAY_SECONDS}s).")
     while True:
         try:
             is_active, call_id = await check_channel_call()
@@ -366,7 +366,7 @@ async def auto_join_monitor_loop():
                             state.add_log(f"[{acc.display_name}] Dropped connection detected.")
                             acc.is_joined = False
 
-                        # Schedule random 2-6 minute delay if not already scheduled
+                        # Schedule random 90-180 second delay if not already scheduled
                         if acc.join_task is None or acc.join_task.done():
                             delay = random.uniform(MIN_JOIN_DELAY_SECONDS, MAX_JOIN_DELAY_SECONDS)
                             acc.join_task = asyncio.create_task(schedule_account_join(acc, delay))
@@ -376,7 +376,7 @@ async def auto_join_monitor_loop():
                 if joined_count > 0:
                     state.status_message = f"Live - {joined_count}/4 accounts joined ({pending_count} pending delay)"
                 else:
-                    state.status_message = f"Live detected - {pending_count}/4 accounts scheduled (2-6m delay)"
+                    state.status_message = f"Live detected - {pending_count}/4 accounts scheduled (90s-180s delay)"
             else:
                 any_joined = any(acc.is_joined for acc in state.accounts)
                 any_pending = any(acc.scheduled_join_time for acc in state.accounts)
@@ -1298,7 +1298,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Top Running Marquee -->
     <div class="marquee-banner">
         <div class="marquee-content">
-            ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 2-6 MIN DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 2-6 MIN DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
+            ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
         </div>
     </div>
 
@@ -1309,7 +1309,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 <div class="app-badge">🎙️</div>
                 <div class="header-text">
                     <h1>JOINLIVE // 4-ACCOUNT STUDIO</h1>
-                    <p>TELETHON + PYTGCALLS VOICE RELAY (2-6 MIN RANDOM DELAY)</p>
+                    <p>TELETHON + PYTGCALLS VOICE RELAY (90s - 180s RANDOM DELAY)</p>
                 </div>
             </div>
             <div id="liveBadge" class="status-pill standby">
@@ -1320,7 +1320,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
         <!-- 4-Accounts Status Pool -->
         <div class="neo-box accounts-container">
-            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 04 ACCOUNTS (2-6M DELAY)</div>
+            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 04 ACCOUNTS (90s-180s DELAY)</div>
             <div class="accounts-grid" id="accountsGrid">
                 <!-- Injected via JS -->
             </div>
@@ -1397,7 +1397,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     </div>
                     <div class="stat-card cyan">
                         <div class="stat-label">DELAY RANGE</div>
-                        <div class="stat-value" style="font-size:1.15rem; margin-top:4px;">2 - 6 MIN</div>
+                        <div class="stat-value" style="font-size:1.15rem; margin-top:4px;">90 - 180s</div>
                     </div>
                     <div class="stat-card pink">
                         <div class="stat-label">AUDIO INGEST</div>
@@ -1517,7 +1517,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     badgeText.textContent = `STREAMING (${data.joined_accounts_count}/4 ACCOUNTS)`;
                 } else if (data.is_call_active) {
                     badge.className = 'status-pill standby';
-                    badgeText.textContent = `LIVE ACTIVE (${data.pending_accounts_count} IN 2-6M DELAY)`;
+                    badgeText.textContent = `LIVE ACTIVE (${data.pending_accounts_count} IN 90s-180s DELAY)`;
                 } else {
                     badge.className = 'status-pill standby';
                     badgeText.textContent = 'WAITING FOR LIVE';
