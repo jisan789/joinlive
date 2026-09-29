@@ -2,6 +2,7 @@ import asyncio
 import collections
 import logging
 import os
+import random
 import sys
 import time
 from typing import List, Set
@@ -24,6 +25,10 @@ WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("PORT", 8000))
 STREAM_TCP_PORT = int(os.environ.get("STREAM_TCP_PORT", 9988))
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
+
+# Random Delay Configuration (2 to 6 minutes default per account)
+MIN_JOIN_DELAY_SECONDS = int(os.environ.get("MIN_JOIN_DELAY_SECONDS", 120))  # 2 minutes
+MAX_JOIN_DELAY_SECONDS = int(os.environ.get("MAX_JOIN_DELAY_SECONDS", 360))  # 6 minutes
 
 # 4 Configured Accounts (Account 1 is the Master Audio Streamer, 2-4 join alongside)
 ACCOUNTS_CONFIG = [
@@ -101,6 +106,8 @@ class AccountState:
         self.display_name: str = name
         self.is_connected: bool = False
         self.is_joined: bool = False
+        self.scheduled_join_time: float | None = None
+        self.join_task: asyncio.Task | None = None
         self.error_message: str | None = None
 
 
@@ -124,7 +131,7 @@ class AppState:
         self.current_call_id = None
         self.listeners_count = 0
         self.stream_subscribers: Set[asyncio.Queue] = set()
-        self.header_buffer = collections.deque(maxlen=16)  # Initial audio frames
+        self.header_buffer = collections.deque(maxlen=16)
         self.tcp_server = None
         self.recent_logs = collections.deque(maxlen=40)
         self.status_message = "Initializing 4 accounts..."
@@ -208,7 +215,7 @@ async def check_channel_call():
 
 
 async def join_account_call(acc: AccountState):
-    """Joins an individual account into the live voice chat."""
+    """Joins an individual account into the live voice chat immediately."""
     if not acc.call_py or not acc.is_connected:
         return False
 
@@ -217,6 +224,7 @@ async def join_account_call(acc: AccountState):
         active_calls = await acc.call_py._binding.calls()
         if SOURCE_CHANNEL_ID in active_calls:
             acc.is_joined = True
+            acc.scheduled_join_time = None
             return True
     except Exception:
         pass
@@ -241,17 +249,54 @@ async def join_account_call(acc: AccountState):
             pass
 
         acc.is_joined = True
+        acc.scheduled_join_time = None
         role_label = "Master Streamer" if acc.is_recorder else "Participant"
         state.add_log(f"[{acc.display_name} | {role_label}] Joined voice chat successfully.")
         return True
     except Exception as e:
         acc.is_joined = False
+        acc.scheduled_join_time = None
         state.add_log(f"[{acc.display_name}] Failed to join call: {e}")
         return False
 
 
+async def schedule_account_join(acc: AccountState, delay_seconds: float):
+    """Waits for the randomized 2-6 minute delay before joining."""
+    acc.scheduled_join_time = time.time() + delay_seconds
+    mins = int(delay_seconds // 60)
+    secs = int(delay_seconds % 60)
+    state.add_log(f"[{acc.display_name}] Live detected! Scheduled to join in {mins}m {secs}s ({int(delay_seconds)}s delay).")
+
+    try:
+        await asyncio.sleep(delay_seconds)
+        is_active, _ = await check_channel_call()
+        if not is_active:
+            state.add_log(f"[{acc.display_name}] Live call ended before scheduled join time.")
+            return False
+        return await join_account_call(acc)
+    except asyncio.CancelledError:
+        state.add_log(f"[{acc.display_name}] Scheduled join cancelled.")
+        return False
+    finally:
+        acc.scheduled_join_time = None
+        acc.join_task = None
+
+
+def trigger_delayed_joins():
+    """Schedules independent 2-6 minute random delays for each unjoined account."""
+    for acc in state.accounts:
+        if not acc.is_joined and (acc.join_task is None or acc.join_task.done()):
+            delay = random.uniform(MIN_JOIN_DELAY_SECONDS, MAX_JOIN_DELAY_SECONDS)
+            acc.join_task = asyncio.create_task(schedule_account_join(acc, delay))
+
+
 async def leave_account_call(acc: AccountState):
-    """Leaves the voice chat for an individual account."""
+    """Leaves the voice chat and cancels any pending delayed join for an account."""
+    if acc.join_task and not acc.join_task.done():
+        acc.join_task.cancel()
+        acc.join_task = None
+    acc.scheduled_join_time = None
+
     if not acc.call_py:
         return
     try:
@@ -263,13 +308,20 @@ async def leave_account_call(acc: AccountState):
         state.add_log(f"[{acc.display_name}] Left voice chat.")
 
 
-async def join_live_call():
-    """Joins the active call simultaneously with all 4 accounts."""
+async def join_live_call_immediate():
+    """Forces immediate join for all 4 accounts (e.g. from manual trigger)."""
     async with state.join_lock:
-        state.add_log(f"Triggering join from 4 accounts in channel: '{state.channel_title}'...")
-        state.status_message = "Joining live stream (4 accounts)..."
+        state.add_log("Triggering immediate join for all 4 accounts...")
+        state.status_message = "Joining live stream (all accounts)..."
 
-        results = await asyncio.gather(*[join_account_call(acc) for acc in state.accounts], return_exceptions=True)
+        # Cancel any scheduled delays
+        for acc in state.accounts:
+            if acc.join_task and not acc.join_task.done():
+                acc.join_task.cancel()
+                acc.join_task = None
+            acc.scheduled_join_time = None
+
+        await asyncio.gather(*[join_account_call(acc) for acc in state.accounts], return_exceptions=True)
         joined_count = sum(1 for acc in state.accounts if acc.is_joined)
 
         if joined_count > 0:
@@ -282,7 +334,7 @@ async def join_live_call():
 
 
 async def leave_live_call():
-    """Leaves the voice chat for all 4 accounts."""
+    """Leaves the voice chat for all 4 accounts and cancels all scheduled joins."""
     async with state.join_lock:
         state.add_log("Leaving live voice chat for all 4 accounts...")
         await asyncio.gather(*[leave_account_call(acc) for acc in state.accounts], return_exceptions=True)
@@ -291,8 +343,8 @@ async def leave_live_call():
 
 
 async def auto_join_monitor_loop():
-    """Resilient internal loop that continuously monitors the channel, auto-joins 4 accounts, and heals dropped connections."""
-    state.add_log("Internal 4-account auto-join loop engaged.")
+    """Resilient internal loop that continuously monitors the channel, auto-schedules random 2-6 min delayed joins, and heals drops."""
+    state.add_log(f"Internal 4-account auto-join loop engaged (Random Delay: {MIN_JOIN_DELAY_SECONDS//60}-{MAX_JOIN_DELAY_SECONDS//60} min).")
     while True:
         try:
             is_active, call_id = await check_channel_call()
@@ -300,7 +352,6 @@ async def auto_join_monitor_loop():
             state.current_call_id = call_id
 
             if is_active:
-                join_tasks = []
                 for acc in state.accounts:
                     call_still_connected = False
                     if acc.is_joined and acc.call_py:
@@ -312,19 +363,24 @@ async def auto_join_monitor_loop():
 
                     if not acc.is_joined or not call_still_connected:
                         if not call_still_connected and acc.is_joined:
-                            state.add_log(f"[{acc.display_name}] Dropped connection detected. Auto-rejoining...")
+                            state.add_log(f"[{acc.display_name}] Dropped connection detected.")
                             acc.is_joined = False
-                        join_tasks.append(join_account_call(acc))
 
-                if join_tasks:
-                    state.add_log(f"Active live detected (Call ID: {call_id})! Auto-joining {len(join_tasks)} account(s)...")
-                    await asyncio.gather(*join_tasks, return_exceptions=True)
+                        # Schedule random 2-6 minute delay if not already scheduled
+                        if acc.join_task is None or acc.join_task.done():
+                            delay = random.uniform(MIN_JOIN_DELAY_SECONDS, MAX_JOIN_DELAY_SECONDS)
+                            acc.join_task = asyncio.create_task(schedule_account_join(acc, delay))
 
                 joined_count = sum(1 for acc in state.accounts if acc.is_joined)
-                state.status_message = f"Live - {joined_count}/4 accounts active"
+                pending_count = sum(1 for acc in state.accounts if acc.scheduled_join_time and not acc.is_joined)
+                if joined_count > 0:
+                    state.status_message = f"Live - {joined_count}/4 accounts joined ({pending_count} pending delay)"
+                else:
+                    state.status_message = f"Live detected - {pending_count}/4 accounts scheduled (2-6m delay)"
             else:
                 any_joined = any(acc.is_joined for acc in state.accounts)
-                if any_joined:
+                any_pending = any(acc.scheduled_join_time for acc in state.accounts)
+                if any_joined or any_pending:
                     state.add_log("Live voice chat has concluded in the channel.")
                     await leave_live_call()
                 state.status_message = "Standby - Monitoring for live stream"
@@ -419,7 +475,7 @@ async def startup_event():
     async def check_and_react():
         is_active, _ = await check_channel_call()
         if is_active:
-            await join_live_call()
+            trigger_delayed_joins()
         else:
             await leave_live_call()
 
@@ -498,11 +554,13 @@ async def health_check():
     uptime = int(time.time() - state.start_time)
     connected_accounts = sum(1 for acc in state.accounts if acc.client and acc.client.is_connected())
     joined_accounts = sum(1 for acc in state.accounts if acc.is_joined)
+    pending_accounts = sum(1 for acc in state.accounts if acc.scheduled_join_time and not acc.is_joined)
     return JSONResponse({
         "status": "healthy",
         "uptime_seconds": uptime,
         "accounts_connected": f"{connected_accounts}/4",
         "accounts_joined": f"{joined_accounts}/4",
+        "accounts_pending_delay": f"{pending_accounts}/4",
         "is_call_active": state.is_call_active,
         "listeners": state.listeners_count,
         "channel_title": state.channel_title,
@@ -513,6 +571,8 @@ async def health_check():
 async def get_status():
     joined_accounts = sum(1 for acc in state.accounts if acc.is_joined)
     connected_accounts = sum(1 for acc in state.accounts if acc.client and acc.client.is_connected())
+    pending_accounts = sum(1 for acc in state.accounts if acc.scheduled_join_time and not acc.is_joined)
+    now = time.time()
     return JSONResponse({
         "channel_title": state.channel_title,
         "channel_id": SOURCE_CHANNEL_ID,
@@ -520,6 +580,7 @@ async def get_status():
         "is_joined": joined_accounts > 0,
         "joined_accounts_count": joined_accounts,
         "connected_accounts_count": connected_accounts,
+        "pending_accounts_count": pending_accounts,
         "total_accounts": len(state.accounts),
         "accounts": [
             {
@@ -530,6 +591,7 @@ async def get_status():
                 "is_connected": acc.is_connected,
                 "is_joined": acc.is_joined,
                 "is_recorder": acc.is_recorder,
+                "remaining_delay_seconds": max(0, int(acc.scheduled_join_time - now)) if (acc.scheduled_join_time and not acc.is_joined) else None,
                 "error": acc.error_message,
             }
             for acc in state.accounts
@@ -547,14 +609,14 @@ async def manual_join():
     is_active, _ = await check_channel_call()
     if not is_active:
         return JSONResponse({"success": False, "message": "No active live stream in channel."})
-    success = await join_live_call()
-    return JSONResponse({"success": success, "message": "Joined call from 4 accounts" if success else "Failed to join"})
+    success = await join_live_call_immediate()
+    return JSONResponse({"success": success, "message": "Joined call immediately from 4 accounts" if success else "Failed to join"})
 
 
 @app.post("/api/leave")
 async def manual_leave():
     await leave_live_call()
-    return JSONResponse({"success": True, "message": "Left call from all 4 accounts"})
+    return JSONResponse({"success": True, "message": "Left call and cancelled all pending delays"})
 
 
 # ==================== NEO-BRUTALIST WEB DASHBOARD UI ====================
@@ -774,12 +836,19 @@ HTML_PAGE = """<!DOCTYPE html>
             flex-direction: column;
             gap: 8px;
             position: relative;
+            transition: all 0.2s ease;
         }
 
         .account-card.active-joined {
             background: #F0FDF4;
             border-color: #000;
             box-shadow: 4px 4px 0px #00F59B;
+        }
+
+        .account-card.active-pending {
+            background: #FFFBEB;
+            border-color: #000;
+            box-shadow: 4px 4px 0px var(--neo-orange);
         }
 
         .acc-top {
@@ -825,7 +894,7 @@ HTML_PAGE = """<!DOCTYPE html>
             align-items: center;
             gap: 6px;
             font-family: 'Space Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 700;
             padding: 4px 8px;
             border: 2px solid var(--main-black);
@@ -840,6 +909,17 @@ HTML_PAGE = """<!DOCTYPE html>
 
         .acc-status-tag.standby {
             background: var(--neo-yellow);
+        }
+
+        .acc-status-tag.delay-pill {
+            background: var(--neo-orange);
+            color: black;
+            animation: pulse-delay 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-delay {
+            from { opacity: 0.85; }
+            to { opacity: 1; }
         }
 
         /* Layout Grid */
@@ -1218,7 +1298,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Top Running Marquee -->
     <div class="marquee-banner">
         <div class="marquee-content">
-            ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // AUTO-JOIN ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ 4 ACCOUNTS CONCURRENT PARTICIPATION &nbsp;&bull;&nbsp; ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // AUTO-JOIN ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; 
+            ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 2-6 MIN DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 2-6 MIN DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
         </div>
     </div>
 
@@ -1229,7 +1309,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 <div class="app-badge">🎙️</div>
                 <div class="header-text">
                     <h1>JOINLIVE // 4-ACCOUNT STUDIO</h1>
-                    <p>TELETHON + PYTGCALLS MULTI-ACCOUNT VOICE RELAY</p>
+                    <p>TELETHON + PYTGCALLS VOICE RELAY (2-6 MIN RANDOM DELAY)</p>
                 </div>
             </div>
             <div id="liveBadge" class="status-pill standby">
@@ -1240,7 +1320,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
         <!-- 4-Accounts Status Pool -->
         <div class="neo-box accounts-container">
-            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 04 ACCOUNTS</div>
+            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 04 ACCOUNTS (2-6M DELAY)</div>
             <div class="accounts-grid" id="accountsGrid">
                 <!-- Injected via JS -->
             </div>
@@ -1293,7 +1373,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 <!-- Manual Trigger Buttons -->
                 <div class="action-grid">
                     <button class="btn-action btn-join" onclick="triggerManualJoin()">
-                        ⚡ JOIN 4 ACCOUNTS
+                        ⚡ FORCE JOIN ALL NOW
                     </button>
                     <button class="btn-action btn-leave" onclick="triggerManualLeave()">
                         ✖ DISCONNECT ALL
@@ -1316,8 +1396,8 @@ HTML_PAGE = """<!DOCTYPE html>
                         <div class="stat-value" id="metricJoined">0 / 4</div>
                     </div>
                     <div class="stat-card cyan">
-                        <div class="stat-label">AUTO-JOIN</div>
-                        <div class="stat-value" style="font-size:1.15rem; margin-top:4px;">ENGAGED</div>
+                        <div class="stat-label">DELAY RANGE</div>
+                        <div class="stat-value" style="font-size:1.15rem; margin-top:4px;">2 - 6 MIN</div>
                     </div>
                     <div class="stat-card pink">
                         <div class="stat-label">AUDIO INGEST</div>
@@ -1437,7 +1517,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     badgeText.textContent = `STREAMING (${data.joined_accounts_count}/4 ACCOUNTS)`;
                 } else if (data.is_call_active) {
                     badge.className = 'status-pill standby';
-                    badgeText.textContent = 'JOINING 4 ACCOUNTS...';
+                    badgeText.textContent = `LIVE ACTIVE (${data.pending_accounts_count} IN 2-6M DELAY)`;
                 } else {
                     badge.className = 'status-pill standby';
                     badgeText.textContent = 'WAITING FOR LIVE';
@@ -1455,11 +1535,28 @@ HTML_PAGE = """<!DOCTYPE html>
                         const isJoined = acc.is_joined;
                         const roleClass = acc.is_recorder ? 'acc-role-master' : 'acc-role-relay';
                         const roleText = acc.is_recorder ? 'MASTER / REC' : 'RELAY';
-                        const statusClass = isJoined ? 'joined' : (acc.is_connected ? 'standby' : '');
-                        const statusText = isJoined ? '🟢 IN VOICE CHAT' : (acc.is_connected ? '🟡 READY' : '🔴 OFFLINE');
+                        
+                        let statusClass = '';
+                        let statusText = '🔴 OFFLINE';
+                        let cardClass = '';
+
+                        if (isJoined) {
+                            statusClass = 'joined';
+                            statusText = '🟢 IN VOICE CHAT';
+                            cardClass = 'active-joined';
+                        } else if (acc.remaining_delay_seconds !== null && acc.remaining_delay_seconds > 0) {
+                            const mins = Math.floor(acc.remaining_delay_seconds / 60);
+                            const secs = acc.remaining_delay_seconds % 60;
+                            statusClass = 'delay-pill';
+                            statusText = `⏳ IN ${mins}m ${secs}s`;
+                            cardClass = 'active-pending';
+                        } else if (acc.is_connected) {
+                            statusClass = 'standby';
+                            statusText = '🟡 READY';
+                        }
 
                         return `
-                            <div class="account-card ${isJoined ? 'active-joined' : ''}">
+                            <div class="account-card ${cardClass}">
                                 <div class="acc-top">
                                     <span class="acc-role-badge ${roleClass}">${roleText}</span>
                                     <span style="font-size:0.75rem; font-weight:800; font-family:'Space Mono'">#0${acc.index}</span>
