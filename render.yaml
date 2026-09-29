@@ -13,7 +13,7 @@ services:
       - key: API_HASH
         value: "c29325ca5de227dc611e54d355f76896"
       - key: SOURCE_CHANNEL_ID
-        value: "-1002325443125"
+        value: "-1003962785452"
       - key: SESSION
         sync: false
       - key: RENDER_EXTERNAL_URL
