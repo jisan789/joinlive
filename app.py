@@ -4,7 +4,7 @@ import logging
 import os
 import sys
 import time
-from typing import Set
+from typing import List, Set
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -19,24 +19,65 @@ from pytgcalls import PyTgCalls
 from pytgcalls.types import GroupCallConfig, RecordStream
 
 # ==================== CONFIGURATION ====================
-API_ID = int(os.environ.get("API_ID", 27634392))
-API_HASH = os.environ.get("API_HASH", "c29325ca5de227dc611e54d355f76896")
-SESSION = os.environ.get(
-    "SESSION",
-    (
-        "1BVtsOGwBu1N9KLlJxcAJFGzeqvLDS-V27RPGJ3w9Crn4P40Atgq6WKp8rRme_vMwel4Tsgt_0jEVg3ohNqmw78yl99EovYsg0P1"
-        "eahpo7f1k0NsTJ7OmKOZldPfJg1JRXHIhZXVl9MsKSzRGaMq2htOkGTevFQ5Kahurj7heaGOhvN8F3qWNPSWjm0xPX9qwju2qXSE"
-        "G6eSZNx-QNO2WIyGrf9KvhldqARB4GL6utk2e3usuIqF9QRLyLWgAlVyTGkQPaAnNp0QJfcmVh1fW1JpSt8nnWcOypVslfDyDY9O"
-        "376fspGb_Jxve12GKYOBXq94g3KR0jvvmDPIjOeS_7_wb7BIpREw="
-    ),
-)
 SOURCE_CHANNEL_ID = int(os.environ.get("SOURCE_CHANNEL_ID", -1003962785452))
-SESSION_NAME = os.environ.get("SESSION_NAME", "my_account")
-
 WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("PORT", 8000))
 STREAM_TCP_PORT = int(os.environ.get("STREAM_TCP_PORT", 9988))
 RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
+
+# 4 Configured Accounts (Account 1 is the Master Audio Streamer, 2-4 join alongside)
+ACCOUNTS_CONFIG = [
+    {
+        "index": 1,
+        "name": "Sakib",
+        "api_id": int(os.environ.get("API_ID_1", os.environ.get("API_ID", 27634392))),
+        "api_hash": os.environ.get("API_HASH_1", os.environ.get("API_HASH", "c29325ca5de227dc611e54d355f76896")),
+        "session": os.environ.get(
+            "SESSION_1",
+            os.environ.get(
+                "SESSION",
+                "1BVtsOGwBu1N9KLlJxcAJFGzeqvLDS-V27RPGJ3w9Crn4P40Atgq6WKp8rRme_vMwel4Tsgt_0jEVg3ohNqmw78yl99EovYsg0P1"
+                "eahpo7f1k0NsTJ7OmKOZldPfJg1JRXHIhZXVl9MsKSzRGaMq2htOkGTevFQ5Kahurj7heaGOhvN8F3qWNPSWjm0xPX9qwju2qXSE"
+                "G6eSZNx-QNO2WIyGrf9KvhldqARB4GL6utk2e3usuIqF9QRLyLWgAlVyTGkQPaAnNp0QJfcmVh1fW1JpSt8nnWcOypVslfDyDY9O"
+                "376fspGb_Jxve12GKYOBXq94g3KR0jvvmDPIjOeS_7_wb7BIpREw="
+            )
+        ),
+        "is_recorder": True,
+    },
+    {
+        "index": 2,
+        "name": "Mahin",
+        "api_id": int(os.environ.get("API_ID_2", 32821627)),
+        "api_hash": os.environ.get("API_HASH_2", "45a260ea58881b721d909c74e40adcbd"),
+        "session": os.environ.get(
+            "SESSION_2",
+            "1BVtsOGwBuz97tJLwZ_DRPNtA0UNw3aqGbF_1vATiPa2YVhIkF8lon9RqStdX3Q9wqt020r7wplavfqxGEiezhBH8tqkER2B1da591h-TepIsoTNjJPMVGhHAGf9rfnuehnfCO84u8jzun2pxJMN6yCQ1GkQ2LRwGK4Kj0X7rf9RdI2v-TnjQ-sK_ED-fekYQS4BHM80QOHHjyuRhj0SrTHGIzqoHTzV4yeYXXxMlYBpJtEjJoBcCnHnTBo27ARx_mM8Q6ucArrbHKeLd-lCCHirP1f7cxONqUUknZV-ZOIcx31cREKMgOhB4nEBBu-dkfUIolGT2Q9MppVN2LUbekzIrdGG3-pQ="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 3,
+        "name": "Rana",
+        "api_id": int(os.environ.get("API_ID_3", 33591633)),
+        "api_hash": os.environ.get("API_HASH_3", "a4e0dc8c681a8c6afe6124140b163768"),
+        "session": os.environ.get(
+            "SESSION_3",
+            "1BVtsOGwBuwKDPeuKNy2P6M5z2RWXitz9okHn35hEMdbM4UJqrNjEiQRAIl3TJNpd_1rz6o6Lo_mGOCS04CAon-qmH8vsOedujp7vMxHamJ_er8HO8fKocsoH1RzQSEe4-uPsclEgMrGFgQo1TLbPVmzS8-MhZmMpN5JArFVwVwdQax9X0eDOT66j2R-xxJg705BnfQ3eyiIrGJdmPYn98zmr4uvLOVo8fXmhiYL_w9ElNRZQ2HIMoAcn7yMF21JWoWaf3eRdK_nZULbdDWZivVvmGtIydaOfKW-xX2cEMeu3AUJH6z34z_QFuIq79u0PXqjO16HKz9-tDdA8GxkiHZMGx3lwQWY="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 4,
+        "name": "Sevou",
+        "api_id": int(os.environ.get("API_ID_4", 35126153)),
+        "api_hash": os.environ.get("API_HASH_4", "a95d613cee72019ccb984d8686c3e592"),
+        "session": os.environ.get(
+            "SESSION_4",
+            "1BVtsOGwBuxTz-8TYWd-9IZVuW-PsEXNzGdrDeb0DoMN0AL9yp_oYb0TRdLW3cqA1JGDradwF4VBpO3Rd_YxPIGuq_Nqg1gkH4bGtMkxhTCEGvNlc5aNXz2Hk5aCJPf2GgjSuKdMTiKFOwGEJt8yjXes0pI5wDSGxl1kjmBK-c9aHZSgFyhVvjoovLLxpzRKJIR4D5GRRQgK-hO1ayfJSIxc1TPqSe6gWnj_8JzRcXt8MvXmCp2umlDn82bfE8OkuwL-uYkO8VkANK6dGi5Udgb41qSKYLhRJ3H8avdlviEz8W-ZInbiJyAFHx8dosnaeaCfoHs6YJ5b7YrAPjI1Qxjpk4_n9S8U="
+        ),
+        "is_recorder": False,
+    },
+]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,23 +85,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger("JoinLiveApp")
 
-# ==================== GLOBAL APP STATE ====================
+
+# ==================== ACCOUNT & APP STATE ====================
+class AccountState:
+    def __init__(self, index: int, name: str, api_id: int, api_hash: str, session: str, is_recorder: bool):
+        self.index = index
+        self.name = name
+        self.api_id = api_id
+        self.api_hash = api_hash
+        self.session_str = session
+        self.is_recorder = is_recorder
+        self.client: TelegramClient | None = None
+        self.call_py: PyTgCalls | None = None
+        self.user_id: int | None = None
+        self.display_name: str = name
+        self.is_connected: bool = False
+        self.is_joined: bool = False
+        self.error_message: str | None = None
+
+
 class AppState:
     def __init__(self):
         self.start_time = time.time()
-        self.client: TelegramClient | None = None
-        self.call_py: PyTgCalls | None = None
+        self.accounts: List[AccountState] = [
+            AccountState(
+                cfg["index"],
+                cfg["name"],
+                cfg["api_id"],
+                cfg["api_hash"],
+                cfg["session"],
+                cfg["is_recorder"],
+            )
+            for cfg in ACCOUNTS_CONFIG
+        ]
         self.channel_entity = None
         self.channel_title = "Unknown Channel"
         self.is_call_active = False
-        self.is_joined = False
         self.current_call_id = None
         self.listeners_count = 0
         self.stream_subscribers: Set[asyncio.Queue] = set()
-        self.header_buffer = collections.deque(maxlen=16)  # Stores initial frames for new listeners
+        self.header_buffer = collections.deque(maxlen=16)  # Initial audio frames
         self.tcp_server = None
         self.recent_logs = collections.deque(maxlen=40)
-        self.status_message = "Initializing..."
+        self.status_message = "Initializing 4 accounts..."
         self.join_lock = asyncio.Lock()
         self.last_stream_time = 0
         self.consecutive_errors = 0
@@ -70,7 +137,9 @@ class AppState:
         self.recent_logs.append(entry)
         logger.info(text)
 
+
 state = AppState()
+
 
 # ==================== STREAM BROADCAST SERVER ====================
 async def handle_tcp_stream(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
@@ -89,7 +158,6 @@ async def handle_tcp_stream(reader: asyncio.StreamReader, writer: asyncio.Stream
             for q in list(state.stream_subscribers):
                 try:
                     if q.qsize() > 50:
-                        # Drop old packet to prevent lag
                         try:
                             q.get_nowait()
                         except asyncio.QueueEmpty:
@@ -111,23 +179,26 @@ async def handle_tcp_stream(reader: asyncio.StreamReader, writer: asyncio.Stream
         except Exception:
             pass
 
+
 async def start_tcp_server():
     server = await asyncio.start_server(handle_tcp_stream, "127.0.0.1", STREAM_TCP_PORT)
     state.tcp_server = server
     state.add_log(f"Audio ingest TCP server ready on 127.0.0.1:{STREAM_TCP_PORT}")
 
+
 # ==================== TELETHON & PYTGCALLS LOGIC ====================
 async def check_channel_call():
-    """Checks if the channel currently has an active voice chat, with self-healing connection."""
-    if not state.client:
+    """Checks if the channel currently has an active voice chat."""
+    primary_acc = next((acc for acc in state.accounts if acc.client and acc.client.is_connected()), None)
+    if not primary_acc or not primary_acc.client:
         return False, None
     try:
-        if not state.client.is_connected():
-            state.add_log("Telegram disconnected. Reconnecting...")
-            await state.client.connect()
+        if not primary_acc.client.is_connected():
+            state.add_log(f"Reconnecting primary client {primary_acc.display_name}...")
+            await primary_acc.client.connect()
             state.add_log("Telegram reconnected successfully.")
 
-        full_chat = await state.client(GetFullChannelRequest(SOURCE_CHANNEL_ID))
+        full_chat = await primary_acc.client(GetFullChannelRequest(SOURCE_CHANNEL_ID))
         call = getattr(full_chat.full_chat, "call", None)
         if call and isinstance(call, InputGroupCall):
             return True, call.id
@@ -135,57 +206,93 @@ async def check_channel_call():
         logger.debug(f"Error checking channel call: {e}")
     return False, None
 
-async def join_live_call():
-    """Joins the active call and pipes audio to the web stream."""
-    async with state.join_lock:
-        if state.is_joined:
+
+async def join_account_call(acc: AccountState):
+    """Joins an individual account into the live voice chat."""
+    if not acc.call_py or not acc.is_connected:
+        return False
+
+    try:
+        # Check if already in call
+        active_calls = await acc.call_py._binding.calls()
+        if SOURCE_CHANNEL_ID in active_calls:
+            acc.is_joined = True
             return True
+    except Exception:
+        pass
 
-        state.add_log(f"Joining live voice chat in channel: {state.channel_title}...")
-        state.status_message = "Joining live stream..."
-
-        stream_dest = f"tcp://127.0.0.1:{STREAM_TCP_PORT}"
-        try:
-            # Record/playback the incoming call audio to our local TCP ingest server
-            await state.call_py.record(
+    try:
+        if acc.is_recorder:
+            stream_dest = f"tcp://127.0.0.1:{STREAM_TCP_PORT}"
+            await acc.call_py.record(
                 SOURCE_CHANNEL_ID,
                 stream=stream_dest,
                 config=GroupCallConfig(auto_start=False),
             )
-            # Mute self so the account doesn't transmit microphone noise
-            try:
-                await state.call_py.mute(SOURCE_CHANNEL_ID)
-            except Exception:
-                pass
+        else:
+            await acc.call_py.play(
+                SOURCE_CHANNEL_ID,
+                config=GroupCallConfig(auto_start=False),
+            )
 
-            state.is_joined = True
-            state.status_message = "Live - Streaming audio to web"
-            state.add_log("Successfully joined live call! Audio streaming is active.")
+        try:
+            await acc.call_py.mute(SOURCE_CHANNEL_ID)
+        except Exception:
+            pass
+
+        acc.is_joined = True
+        role_label = "Master Streamer" if acc.is_recorder else "Participant"
+        state.add_log(f"[{acc.display_name} | {role_label}] Joined voice chat successfully.")
+        return True
+    except Exception as e:
+        acc.is_joined = False
+        state.add_log(f"[{acc.display_name}] Failed to join call: {e}")
+        return False
+
+
+async def leave_account_call(acc: AccountState):
+    """Leaves the voice chat for an individual account."""
+    if not acc.call_py:
+        return
+    try:
+        await acc.call_py.leave_call(SOURCE_CHANNEL_ID)
+    except Exception as e:
+        logger.debug(f"[{acc.display_name}] Leave error: {e}")
+    finally:
+        acc.is_joined = False
+        state.add_log(f"[{acc.display_name}] Left voice chat.")
+
+
+async def join_live_call():
+    """Joins the active call simultaneously with all 4 accounts."""
+    async with state.join_lock:
+        state.add_log(f"Triggering join from 4 accounts in channel: '{state.channel_title}'...")
+        state.status_message = "Joining live stream (4 accounts)..."
+
+        results = await asyncio.gather(*[join_account_call(acc) for acc in state.accounts], return_exceptions=True)
+        joined_count = sum(1 for acc in state.accounts if acc.is_joined)
+
+        if joined_count > 0:
+            state.status_message = f"Live - {joined_count}/4 accounts joined & streaming"
+            state.add_log(f"Joined voice chat: {joined_count}/4 accounts active.")
             return True
-        except Exception as e:
-            state.is_joined = False
-            state.status_message = f"Join error: {e}"
-            state.add_log(f"Failed to join call: {e}")
+        else:
+            state.status_message = "Join failed for all accounts"
             return False
 
+
 async def leave_live_call():
-    """Leaves the voice chat."""
+    """Leaves the voice chat for all 4 accounts."""
     async with state.join_lock:
-        if not state.is_joined:
-            return
-        state.add_log("Leaving live voice chat...")
-        try:
-            await state.call_py.leave_call(SOURCE_CHANNEL_ID)
-        except Exception as e:
-            logger.debug(f"Leave error: {e}")
-        finally:
-            state.is_joined = False
-            state.status_message = "Standby - Waiting for live stream"
-            state.add_log("Left call. Waiting for next live session.")
+        state.add_log("Leaving live voice chat for all 4 accounts...")
+        await asyncio.gather(*[leave_account_call(acc) for acc in state.accounts], return_exceptions=True)
+        state.status_message = "Standby - Waiting for live stream"
+        state.add_log("All accounts left call. Waiting for next live session.")
+
 
 async def auto_join_monitor_loop():
-    """Resilient internal loop that continuously monitors the channel, auto-joins live calls, and heals dropped streams."""
-    state.add_log("Internal auto-join loop engaged.")
+    """Resilient internal loop that continuously monitors the channel, auto-joins 4 accounts, and heals dropped connections."""
+    state.add_log("Internal 4-account auto-join loop engaged.")
     while True:
         try:
             is_active, call_id = await check_channel_call()
@@ -193,24 +300,31 @@ async def auto_join_monitor_loop():
             state.current_call_id = call_id
 
             if is_active:
-                # Watchdog: verify call is still connected in PyTgCalls binding
-                call_still_connected = False
-                if state.is_joined and state.call_py:
-                    try:
-                        active_calls = await state.call_py._binding.calls()
-                        call_still_connected = SOURCE_CHANNEL_ID in active_calls
-                    except Exception:
-                        call_still_connected = False
+                join_tasks = []
+                for acc in state.accounts:
+                    call_still_connected = False
+                    if acc.is_joined and acc.call_py:
+                        try:
+                            active_calls = await acc.call_py._binding.calls()
+                            call_still_connected = SOURCE_CHANNEL_ID in active_calls
+                        except Exception:
+                            call_still_connected = False
 
-                if not state.is_joined or not call_still_connected:
-                    if not call_still_connected and state.is_joined:
-                        state.add_log("Detected dropped stream while call is still active. Auto-rejoining...")
-                        state.is_joined = False
+                    if not acc.is_joined or not call_still_connected:
+                        if not call_still_connected and acc.is_joined:
+                            state.add_log(f"[{acc.display_name}] Dropped connection detected. Auto-rejoining...")
+                            acc.is_joined = False
+                        join_tasks.append(join_account_call(acc))
 
-                    state.add_log(f"Active live detected (Call ID: {call_id})! Auto-joining...")
-                    await join_live_call()
+                if join_tasks:
+                    state.add_log(f"Active live detected (Call ID: {call_id})! Auto-joining {len(join_tasks)} account(s)...")
+                    await asyncio.gather(*join_tasks, return_exceptions=True)
+
+                joined_count = sum(1 for acc in state.accounts if acc.is_joined)
+                state.status_message = f"Live - {joined_count}/4 accounts active"
             else:
-                if state.is_joined:
+                any_joined = any(acc.is_joined for acc in state.accounts)
+                if any_joined:
                     state.add_log("Live voice chat has concluded in the channel.")
                     await leave_live_call()
                 state.status_message = "Standby - Monitoring for live stream"
@@ -229,13 +343,14 @@ async def auto_join_monitor_loop():
 
         await asyncio.sleep(5)
 
+
 async def render_keep_alive_loop():
-    """Continuous internal keep-alive loop to prevent Render from going idle."""
+    """Continuous internal keep-alive loop to prevent Render from idling."""
     state.add_log("Render keep-alive loop active.")
-    await asyncio.sleep(20)  # Wait for startup to complete
+    await asyncio.sleep(20)
     while True:
         try:
-            await asyncio.sleep(480)  # Self-ping every 8 minutes
+            await asyncio.sleep(480)
             target_url = RENDER_EXTERNAL_URL.rstrip("/") if RENDER_EXTERNAL_URL else f"http://127.0.0.1:{WEB_PORT}"
             ping_url = f"{target_url}/health"
 
@@ -249,71 +364,89 @@ async def render_keep_alive_loop():
         except Exception as e:
             logger.debug(f"Keep-alive ping note: {e}")
 
+
 # ==================== FASTAPI WEB APPLICATION ====================
-app = FastAPI(title="Telegram Live Streamer")
+app = FastAPI(title="Telegram 4-Account Live Voice Relay")
+
 
 @app.on_event("startup")
 async def startup_event():
     # 1. Start TCP audio streamer ingest
     await start_tcp_server()
 
-    # 2. Start Telethon Client
-    state.add_log("Authenticating with Telegram...")
-    state.client = TelegramClient(StringSession(SESSION), API_ID, API_HASH)
-    await state.client.start()
+    # 2. Start Telethon Clients and PyTgCalls engines for all 4 accounts
+    for acc in state.accounts:
+        try:
+            state.add_log(f"Authenticating Account #{acc.index} ({acc.name})...")
+            client = TelegramClient(StringSession(acc.session_str), acc.api_id, acc.api_hash)
+            await client.start()
+            acc.client = client
 
-    me = await state.client.get_me()
-    state.add_log(f"Telegram connected as: {me.first_name} (ID: {me.id})")
+            me = await client.get_me()
+            acc.user_id = me.id
+            acc.display_name = f"{me.first_name} (ID: {me.id})"
+            acc.is_connected = True
+            state.add_log(f"Account #{acc.index} connected as: {acc.display_name}")
 
-    # 3. Resolve target channel
-    try:
-        entity = await state.client.get_entity(SOURCE_CHANNEL_ID)
-        state.channel_entity = entity
-        state.channel_title = getattr(entity, "title", str(SOURCE_CHANNEL_ID))
-        state.add_log(f"Target channel identified: '{state.channel_title}' ({SOURCE_CHANNEL_ID})")
-    except Exception as e:
-        state.channel_title = f"Channel {SOURCE_CHANNEL_ID}"
-        state.add_log(f"Could not resolve entity title: {e}")
+            state.add_log(f"Starting PyTgCalls engine for Account #{acc.index}...")
+            call_py = PyTgCalls(client)
+            await call_py.start()
+            acc.call_py = call_py
+            state.add_log(f"Account #{acc.index} PyTgCalls engine ready.")
+        except Exception as e:
+            acc.error_message = str(e)
+            state.add_log(f"Account #{acc.index} initialization failed: {e}")
 
-    # 4. Start PyTgCalls
-    state.add_log("Initializing PyTgCalls engine...")
-    state.call_py = PyTgCalls(state.client)
-    await state.call_py.start()
-    state.add_log("PyTgCalls engine initialized successfully.")
+    # 3. Resolve target channel using first available connected client
+    primary_client = next((acc.client for acc in state.accounts if acc.client and acc.client.is_connected()), None)
+    if primary_client:
+        try:
+            entity = await primary_client.get_entity(SOURCE_CHANNEL_ID)
+            state.channel_entity = entity
+            state.channel_title = getattr(entity, "title", str(SOURCE_CHANNEL_ID))
+            state.add_log(f"Target channel identified: '{state.channel_title}' ({SOURCE_CHANNEL_ID})")
+        except Exception as e:
+            state.channel_title = f"Channel {SOURCE_CHANNEL_ID}"
+            state.add_log(f"Could not resolve entity title: {e}")
 
-    # 5. Listen to raw Telegram update events for instant detection
-    @state.client.on(events.Raw)
-    async def raw_handler(update):
-        if isinstance(update, UpdateGroupCall):
-            state.add_log("Instant update: Group call state changed in channel.")
-            asyncio.create_task(check_and_react())
+        # Listen to raw Telegram update events for instant detection
+        @primary_client.on(events.Raw)
+        async def raw_handler(update):
+            if isinstance(update, UpdateGroupCall):
+                state.add_log("Instant update: Group call state changed in channel.")
+                asyncio.create_task(check_and_react())
 
     async def check_and_react():
         is_active, _ = await check_channel_call()
-        if is_active and not state.is_joined:
+        if is_active:
             await join_live_call()
-        elif not is_active and state.is_joined:
+        else:
             await leave_live_call()
 
-    # 6. Start the internal resilient loops
+    # 4. Start the internal resilient loops
     asyncio.create_task(auto_join_monitor_loop())
     asyncio.create_task(render_keep_alive_loop())
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     state.add_log("Shutting down application...")
-    if state.is_joined:
-        await leave_live_call()
-    if state.call_py:
-        try:
-            await state.call_py.stop()
-        except Exception:
-            pass
-    if state.client:
-        await state.client.disconnect()
+    await leave_live_call()
+    for acc in state.accounts:
+        if acc.call_py:
+            try:
+                await acc.call_py.stop()
+            except Exception:
+                pass
+        if acc.client:
+            try:
+                await acc.client.disconnect()
+            except Exception:
+                pass
     if state.tcp_server:
         state.tcp_server.close()
         await state.tcp_server.wait_closed()
+
 
 @app.get("/stream")
 async def stream_audio(request: Request):
@@ -339,7 +472,6 @@ async def stream_audio(request: Request):
                     data = await asyncio.wait_for(queue.get(), timeout=2.0)
                     yield data
                 except asyncio.TimeoutError:
-                    # Keep-alive empty chunk or wait
                     continue
         except asyncio.CancelledError:
             pass
@@ -360,26 +492,48 @@ async def stream_audio(request: Request):
         },
     )
 
+
 @app.get("/health")
 async def health_check():
     uptime = int(time.time() - state.start_time)
+    connected_accounts = sum(1 for acc in state.accounts if acc.client and acc.client.is_connected())
+    joined_accounts = sum(1 for acc in state.accounts if acc.is_joined)
     return JSONResponse({
         "status": "healthy",
         "uptime_seconds": uptime,
-        "telegram_connected": state.client.is_connected() if state.client else False,
+        "accounts_connected": f"{connected_accounts}/4",
+        "accounts_joined": f"{joined_accounts}/4",
         "is_call_active": state.is_call_active,
-        "is_joined": state.is_joined,
         "listeners": state.listeners_count,
         "channel_title": state.channel_title,
     })
 
+
 @app.get("/api/status")
 async def get_status():
+    joined_accounts = sum(1 for acc in state.accounts if acc.is_joined)
+    connected_accounts = sum(1 for acc in state.accounts if acc.client and acc.client.is_connected())
     return JSONResponse({
         "channel_title": state.channel_title,
         "channel_id": SOURCE_CHANNEL_ID,
         "is_call_active": state.is_call_active,
-        "is_joined": state.is_joined,
+        "is_joined": joined_accounts > 0,
+        "joined_accounts_count": joined_accounts,
+        "connected_accounts_count": connected_accounts,
+        "total_accounts": len(state.accounts),
+        "accounts": [
+            {
+                "index": acc.index,
+                "name": acc.name,
+                "display_name": acc.display_name,
+                "user_id": acc.user_id,
+                "is_connected": acc.is_connected,
+                "is_joined": acc.is_joined,
+                "is_recorder": acc.is_recorder,
+                "error": acc.error_message,
+            }
+            for acc in state.accounts
+        ],
         "current_call_id": str(state.current_call_id) if state.current_call_id else None,
         "listeners_count": state.listeners_count,
         "status_message": state.status_message,
@@ -387,18 +541,21 @@ async def get_status():
         "logs": list(state.recent_logs),
     })
 
+
 @app.post("/api/join")
 async def manual_join():
     is_active, _ = await check_channel_call()
     if not is_active:
         return JSONResponse({"success": False, "message": "No active live stream in channel."})
     success = await join_live_call()
-    return JSONResponse({"success": success, "message": "Joined call" if success else "Failed to join"})
+    return JSONResponse({"success": success, "message": "Joined call from 4 accounts" if success else "Failed to join"})
+
 
 @app.post("/api/leave")
 async def manual_leave():
     await leave_live_call()
-    return JSONResponse({"success": True, "message": "Left call"})
+    return JSONResponse({"success": True, "message": "Left call from all 4 accounts"})
+
 
 # ==================== NEO-BRUTALIST WEB DASHBOARD UI ====================
 HTML_PAGE = """<!DOCTYPE html>
@@ -406,7 +563,7 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JOINLIVE // TELEGRAM VOICE RELAY</title>
+    <title>JOINLIVE // 4-ACCOUNT VOICE RELAY</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -477,7 +634,7 @@ HTML_PAGE = """<!DOCTYPE html>
         /* Main Container */
         .container {
             width: 94%;
-            max-width: 1040px;
+            max-width: 1080px;
             margin-top: 28px;
             display: flex;
             flex-direction: column;
@@ -580,6 +737,109 @@ HTML_PAGE = """<!DOCTYPE html>
         @keyframes blink {
             from { transform: scale(0.9); opacity: 0.7; }
             to { transform: scale(1.2); opacity: 1; }
+        }
+
+        /* Accounts Pool Strip */
+        .accounts-container {
+            padding: 22px 24px;
+            position: relative;
+        }
+
+        .accounts-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .accounts-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 540px) {
+            .accounts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .account-card {
+            background: #FAFAFA;
+            border: 3px solid var(--main-black);
+            border-radius: 12px;
+            padding: 14px 16px;
+            box-shadow: var(--shadow-hard-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+        }
+
+        .account-card.active-joined {
+            background: #F0FDF4;
+            border-color: #000;
+            box-shadow: 4px 4px 0px #00F59B;
+        }
+
+        .acc-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .acc-role-badge {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border: 2px solid var(--main-black);
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .acc-role-master {
+            background: var(--neo-pink);
+            color: white;
+        }
+
+        .acc-role-relay {
+            background: var(--neo-cyan);
+            color: black;
+        }
+
+        .acc-name {
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+
+        .acc-id {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72rem;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .acc-status-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border: 2px solid var(--main-black);
+            border-radius: 6px;
+            background: #E5E7EB;
+            margin-top: 4px;
+        }
+
+        .acc-status-tag.joined {
+            background: var(--neo-green);
+        }
+
+        .acc-status-tag.standby {
+            background: var(--neo-yellow);
         }
 
         /* Layout Grid */
@@ -752,12 +1012,6 @@ HTML_PAGE = """<!DOCTYPE html>
             color: #ffffff;
         }
 
-        .play-btn-brutal svg {
-            width: 24px;
-            height: 24px;
-            fill: currentColor;
-        }
-
         /* Volume Box */
         .vol-box {
             background: #F3F4F6;
@@ -872,7 +1126,7 @@ HTML_PAGE = """<!DOCTYPE html>
         }
 
         .stat-value {
-            font-size: 1.6rem;
+            font-size: 1.5rem;
             font-weight: 900;
             line-height: 1;
         }
@@ -964,7 +1218,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Top Running Marquee -->
     <div class="marquee-banner">
         <div class="marquee-content">
-            ⚡ TELEGRAM VOICE RELAY // AUTO-JOIN ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 & TELETHON &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ REAL-TIME MP3 BROADCAST &nbsp;&bull;&nbsp; ⚡ TELEGRAM VOICE RELAY // AUTO-JOIN ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 & TELETHON &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; 
+            ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // AUTO-JOIN ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ 4 ACCOUNTS CONCURRENT PARTICIPATION &nbsp;&bull;&nbsp; ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // AUTO-JOIN ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; 
         </div>
     </div>
 
@@ -974,8 +1228,8 @@ HTML_PAGE = """<!DOCTYPE html>
             <div class="header-title-group">
                 <div class="app-badge">🎙️</div>
                 <div class="header-text">
-                    <h1>JOINLIVE // STUDIO</h1>
-                    <p>TELETHON + PYTGCALLS AUTOMATIC RELAY ENGINE</p>
+                    <h1>JOINLIVE // 4-ACCOUNT STUDIO</h1>
+                    <p>TELETHON + PYTGCALLS MULTI-ACCOUNT VOICE RELAY</p>
                 </div>
             </div>
             <div id="liveBadge" class="status-pill standby">
@@ -983,6 +1237,14 @@ HTML_PAGE = """<!DOCTYPE html>
                 <span id="liveBadgeText">WAITING FOR LIVE</span>
             </div>
         </header>
+
+        <!-- 4-Accounts Status Pool -->
+        <div class="neo-box accounts-container">
+            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 04 ACCOUNTS</div>
+            <div class="accounts-grid" id="accountsGrid">
+                <!-- Injected via JS -->
+            </div>
+        </div>
 
         <!-- Main Body Grid -->
         <div class="layout-grid">
@@ -1031,10 +1293,10 @@ HTML_PAGE = """<!DOCTYPE html>
                 <!-- Manual Trigger Buttons -->
                 <div class="action-grid">
                     <button class="btn-action btn-join" onclick="triggerManualJoin()">
-                        ⚡ JOIN CALL NOW
+                        ⚡ JOIN 4 ACCOUNTS
                     </button>
                     <button class="btn-action btn-leave" onclick="triggerManualLeave()">
-                        ✖ DISCONNECT
+                        ✖ DISCONNECT ALL
                     </button>
                 </div>
             </div>
@@ -1050,16 +1312,16 @@ HTML_PAGE = """<!DOCTYPE html>
                         <div class="stat-value" id="metricListeners">0</div>
                     </div>
                     <div class="stat-card yellow">
-                        <div class="stat-label">AUDIO INGEST</div>
-                        <div class="stat-value" id="metricAudio">IDLE</div>
+                        <div class="stat-label">JOINED ACCOUNTS</div>
+                        <div class="stat-value" id="metricJoined">0 / 4</div>
                     </div>
                     <div class="stat-card cyan">
                         <div class="stat-label">AUTO-JOIN</div>
                         <div class="stat-value" style="font-size:1.15rem; margin-top:4px;">ENGAGED</div>
                     </div>
                     <div class="stat-card pink">
-                        <div class="stat-label">ENCODER</div>
-                        <div class="stat-value" style="font-size:1.15rem; margin-top:4px;">MP3/FFMPEG</div>
+                        <div class="stat-label">AUDIO INGEST</div>
+                        <div class="stat-value" id="metricAudio" style="font-size:1.15rem; margin-top:4px;">IDLE</div>
                     </div>
                 </div>
 
@@ -1084,7 +1346,7 @@ HTML_PAGE = """<!DOCTYPE html>
         </div>
 
         <footer>
-            JOINLIVE STUDIO &bull; NEO-BRUTALIST LIVE VOICE RELAY &bull; TELETHON & PYTGCALLS
+            JOINLIVE STUDIO &bull; 4-ACCOUNT TELEGRAM LIVE RELAY &bull; TELETHON & PYTGCALLS
         </footer>
     </div>
 
@@ -1112,7 +1374,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     playLabel.textContent = 'STOP LISTENING';
                 }).catch(err => {
                     console.error('Playback error:', err);
-                    alert('Connecting to live stream... If the live voice chat just started, please wait a second.');
+                    alert('Connecting to live stream... If the live voice chat just started, please wait a moment.');
                 });
             } else {
                 audio.pause();
@@ -1172,10 +1434,10 @@ HTML_PAGE = """<!DOCTYPE html>
                 const badgeText = document.getElementById('liveBadgeText');
                 if (data.is_joined) {
                     badge.className = 'status-pill live';
-                    badgeText.textContent = 'STREAMING LIVE';
+                    badgeText.textContent = `STREAMING (${data.joined_accounts_count}/4 ACCOUNTS)`;
                 } else if (data.is_call_active) {
                     badge.className = 'status-pill standby';
-                    badgeText.textContent = 'JOINING CALL...';
+                    badgeText.textContent = 'JOINING 4 ACCOUNTS...';
                 } else {
                     badge.className = 'status-pill standby';
                     badgeText.textContent = 'WAITING FOR LIVE';
@@ -1183,7 +1445,34 @@ HTML_PAGE = """<!DOCTYPE html>
 
                 // Metrics
                 document.getElementById('metricListeners').textContent = data.listeners_count;
-                document.getElementById('metricAudio').textContent = data.streaming_active ? 'STREAMING' : (data.is_joined ? 'RECEIVING' : 'STANDBY');
+                document.getElementById('metricJoined').textContent = `${data.joined_accounts_count} / ${data.total_accounts}`;
+                document.getElementById('metricAudio').textContent = data.streaming_active ? 'STREAMING' : (data.is_joined ? 'CONNECTED' : 'STANDBY');
+
+                // Accounts Grid Rendering
+                const accGrid = document.getElementById('accountsGrid');
+                if (data.accounts && data.accounts.length) {
+                    accGrid.innerHTML = data.accounts.map(acc => {
+                        const isJoined = acc.is_joined;
+                        const roleClass = acc.is_recorder ? 'acc-role-master' : 'acc-role-relay';
+                        const roleText = acc.is_recorder ? 'MASTER / REC' : 'RELAY';
+                        const statusClass = isJoined ? 'joined' : (acc.is_connected ? 'standby' : '');
+                        const statusText = isJoined ? '🟢 IN VOICE CHAT' : (acc.is_connected ? '🟡 READY' : '🔴 OFFLINE');
+
+                        return `
+                            <div class="account-card ${isJoined ? 'active-joined' : ''}">
+                                <div class="acc-top">
+                                    <span class="acc-role-badge ${roleClass}">${roleText}</span>
+                                    <span style="font-size:0.75rem; font-weight:800; font-family:'Space Mono'">#0${acc.index}</span>
+                                </div>
+                                <div class="acc-name">${acc.name}</div>
+                                <div class="acc-id">ID: ${acc.user_id || 'Connecting...'}</div>
+                                <div class="acc-status-tag ${statusClass}">
+                                    <span>${statusText}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
 
                 // Terminal Logs
                 if (data.logs && data.logs.length) {
@@ -1204,9 +1493,11 @@ HTML_PAGE = """<!DOCTYPE html>
 </html>
 """
 
+
 @app.get("/")
 async def index():
     return HTMLResponse(content=HTML_PAGE)
+
 
 # ==================== ENTRYPOINT ====================
 if __name__ == "__main__":
