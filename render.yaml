@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: joinlive-telethon-relay
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: API_ID
+        value: "27634392"
+      - key: API_HASH
+        value: "c29325ca5de227dc611e54d355f76896"
+      - key: SOURCE_CHANNEL_ID
+        value: "-1003962785452"
+      - key: SESSION
+        sync: false
+      - key: RENDER_EXTERNAL_URL
+        fromService:
+          type: web
+          name: joinlive-telethon-relay
+          property: host
