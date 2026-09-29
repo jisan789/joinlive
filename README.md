@@ -25,7 +25,7 @@ An automated 24/7 service that connects to Telegram using **Telethon** and **PyT
 
 | Variable | Default | Description |
 |---|---|---|
-| `SOURCE_CHANNEL_ID` | `-1003962785452` | Target Telegram channel ID |
+| `SOURCE_CHANNEL_ID` | `-1002325443125` | Target Telegram channel ID |
 | `MIN_JOIN_DELAY_SECONDS` | `120` | Minimum join delay (2 minutes) |
 | `MAX_JOIN_DELAY_SECONDS` | `360` | Maximum join delay (6 minutes) |
 | `PORT` | `8000` | Web dashboard & streaming port |

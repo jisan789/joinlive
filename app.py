@@ -20,7 +20,7 @@ from pytgcalls import PyTgCalls
 from pytgcalls.types import GroupCallConfig, RecordStream
 
 # ==================== CONFIGURATION ====================
-SOURCE_CHANNEL_ID = int(os.environ.get("SOURCE_CHANNEL_ID", -1003962785452))
+SOURCE_CHANNEL_ID = int(os.environ.get("SOURCE_CHANNEL_ID", -1002325443125))
 WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.environ.get("PORT", 8000))
 STREAM_TCP_PORT = int(os.environ.get("STREAM_TCP_PORT", 9988))
