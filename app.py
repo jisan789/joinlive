@@ -30,7 +30,7 @@ RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
 MIN_JOIN_DELAY_SECONDS = int(os.environ.get("MIN_JOIN_DELAY_SECONDS", 90))  # 90 seconds (1.5 min)
 MAX_JOIN_DELAY_SECONDS = int(os.environ.get("MAX_JOIN_DELAY_SECONDS", 180))  # 180 seconds (3 min)
 
-# 4 Configured Accounts (Account 1 is the Master Audio Streamer, 2-4 join alongside)
+# 9 Configured Accounts (Account 1 is the Master Audio Streamer, 2-9 join alongside)
 ACCOUNTS_CONFIG = [
     {
         "index": 1,
@@ -79,6 +79,61 @@ ACCOUNTS_CONFIG = [
         "session": os.environ.get(
             "SESSION_4",
             "1BVtsOGwBuxTz-8TYWd-9IZVuW-PsEXNzGdrDeb0DoMN0AL9yp_oYb0TRdLW3cqA1JGDradwF4VBpO3Rd_YxPIGuq_Nqg1gkH4bGtMkxhTCEGvNlc5aNXz2Hk5aCJPf2GgjSuKdMTiKFOwGEJt8yjXes0pI5wDSGxl1kjmBK-c9aHZSgFyhVvjoovLLxpzRKJIR4D5GRRQgK-hO1ayfJSIxc1TPqSe6gWnj_8JzRcXt8MvXmCp2umlDn82bfE8OkuwL-uYkO8VkANK6dGi5Udgb41qSKYLhRJ3H8avdlviEz8W-ZInbiJyAFHx8dosnaeaCfoHs6YJ5b7YrAPjI1Qxjpk4_n9S8U="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 5,
+        "name": "Zoroo",
+        "api_id": int(os.environ.get("API_ID_5", 30538685)),
+        "api_hash": os.environ.get("API_HASH_5", "1d5b6b83069a4daf61865f9044177ea8"),
+        "session": os.environ.get(
+            "SESSION_5",
+            "1BVtsOGwBu5fwCYhIg7O2HuCnvef1hBennYEHs3rSeSuUoTA1f24f0Qjq9bwx2W08rKkA5jNBLdvwTzY8LUz3b437OYyun3mv26rPMSDfXikc_LyVvfUdv4-VkJZ4pmxufMonMj0aJBZGqeJDIWrGWbGazIUWHASRHkNdLVb_MfLpciXbS2Y9zY_bnPDLTE8N41DLRS0NO1JnjFOejID21L3g5ydTLi05j3bKGfV_KsxQFWW1qUIxmZJWbhSPpTZ5tadyqMscGUvKww4q3lqOjv9aLu_AWN_v913Uxlpbr8GIyHFulZRcLMlztI9R_nwkp7U1Y8p6Xd5xebMs9oYkC0LEpar1SGs="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 6,
+        "name": "Fuego FF",
+        "api_id": int(os.environ.get("API_ID_6", 33497150)),
+        "api_hash": os.environ.get("API_HASH_6", "fe085f2625dd413cf9222e877bffb9d4"),
+        "session": os.environ.get(
+            "SESSION_6",
+            "1BVtsOGwBu7E239PpoxhLiuxrIBksx_B3p3nr8LGzXHELlfDtt1E506HU_G5Ma1Yc-tRXtBC8nlcHgJTc8xza7SjRZKfA_84m7_eqKsEntHy0eq5OzxsL7qJlYWsTfuoZ_L_xHqpF5YEIEhAnfwQQB_itB5P-18yIDEzq5RRkdF7KxLhbnBmsRXOvXXdvRhHCbw9dAZPyqpzrkXkABBEk0wa-t94EtG-dJIe5A7Nb7wFI4_TB8MOp3BG6Wagy7TOqse3gQb8KqPUb6hj-a8uaAq8qUZsL9bVFI1_qTHkiNAlkXiaViXAEEhxlROnUDYd8WzqedHbyVajW-zKswZtGmjtI2JDdX0k="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 7,
+        "name": "Ntz",
+        "api_id": int(os.environ.get("API_ID_7", 35936725)),
+        "api_hash": os.environ.get("API_HASH_7", "883ed929ecbc1ead59ca25dbec99b1d5"),
+        "session": os.environ.get(
+            "SESSION_7",
+            "1BVtsOGwBu3QfGUilzcBH4y6-vgEdI55-c3t3ItHVuwhP8jtVDIYDbiUnRII4MhXaauC-OjzaLGGJ0Pp8YqlIxFMgv5puUUyf_wao3gzWns8O9m6ysWnaPXYvIr-D2jjq_6kDP8PP61oXQbIwzXRE9YIcZFs_rdopCsuMtWP-HR2B6OzScRhRodFEHS-9aZAUBJWah0trOw9ecPSZDHh5g4GmSgxZLKWMwW6RAcAySX_Kcw5e6QkFsb6pG6kVlr5tOonC1x8QoX4QSOoW87r3KGSqzplEdXeABXqBJ6MY15OD7vLCPc9TsvxWpDA_baTcajxUWEb3kzXQa3c2x6CLh96k5z0Jeyk="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 8,
+        "name": "Abdul",
+        "api_id": int(os.environ.get("API_ID_8", 37091597)),
+        "api_hash": os.environ.get("API_HASH_8", "a35558ba13a2f4d19a5f6523c9d8aba8"),
+        "session": os.environ.get(
+            "SESSION_8",
+            "1BVtsOGwBu3fLeWpMuvbfpT1wfsn6qRyzD0OxJxgM1u29F8CTbZzcThv3H7K5VOBSN9bkxcnmj2siqklhsDGxXdnZZxdJnFpVia5Gm1BH5sGFkLxWcREY7dKH2GVFI9MrJ5Fv-4gVHxd41JRnnSXw1jGgkwHhOd-fYVDRZzJ1-TbBexdbknBKzYJcwQM18k1SIoisxFl0NuCur6JlpR3cBK6XQualJmtv371kCF5wcrQ1slNqPwLpqxcusKKAr8JOi3yYjANuJc4qCn5CZkZ0_TpaxduXJU0RJEEXbDOBww8lF3dmPN7aU5KHohw67sNupOQFopCL9uzRi-sLUJPM4Yv3arJP2pY="
+        ),
+        "is_recorder": False,
+    },
+    {
+        "index": 9,
+        "name": "Jerin",
+        "api_id": int(os.environ.get("API_ID_9", 30249688)),
+        "api_hash": os.environ.get("API_HASH_9", "3ae477cb289d7025540ea28c4a6d537d"),
+        "session": os.environ.get(
+            "SESSION_9",
+            "1BVtsOGwBuzbUMBBXeOMltxfcy7RKO8POYLJDaqzdsubqFiSZWNFsrENFN6b9YeI0kvBiqgxUWK0rMn9mvYSEQs3Wbw1c5b0oiPzPI64G6oINTUqT-S4U8Ckzq9C0Q_ILo8m_whJNq3CRnbJt1QdAWVE_DmtQ5tbvc07AM6BNVPJnDqyeQM118T56HXSb3ykuHS2ZVWtu1fQEQzwB23G3PBXMgpxxFTWYQDxvn_SPuLnxOoC8BbteQrWv2TgiKP1NMjUNtbvodPcwjAcZkVAX8nivkL-3PhGo1RNs3OdQGMAD30_yrOBFaZK5qyUWHfTvNE0Y9pJZOjw41gfc0rjUD2C34fpde2w="
         ),
         "is_recorder": False,
     },
@@ -134,7 +189,7 @@ class AppState:
         self.header_buffer = collections.deque(maxlen=16)
         self.tcp_server = None
         self.recent_logs = collections.deque(maxlen=40)
-        self.status_message = "Initializing 4 accounts..."
+        self.status_message = "Initializing 9 accounts..."
         self.join_lock = asyncio.Lock()
         self.last_stream_time = 0
         self.consecutive_errors = 0
@@ -309,9 +364,9 @@ async def leave_account_call(acc: AccountState):
 
 
 async def join_live_call_immediate():
-    """Forces immediate join for all 4 accounts (e.g. from manual trigger)."""
+    """Forces immediate join for all 9 accounts (e.g. from manual trigger)."""
     async with state.join_lock:
-        state.add_log("Triggering immediate join for all 4 accounts...")
+        state.add_log("Triggering immediate join for all 9 accounts...")
         state.status_message = "Joining live stream (all accounts)..."
 
         # Cancel any scheduled delays
@@ -325,8 +380,8 @@ async def join_live_call_immediate():
         joined_count = sum(1 for acc in state.accounts if acc.is_joined)
 
         if joined_count > 0:
-            state.status_message = f"Live - {joined_count}/4 accounts joined & streaming"
-            state.add_log(f"Joined voice chat: {joined_count}/4 accounts active.")
+            state.status_message = f"Live - {joined_count}/{len(state.accounts)} accounts joined & streaming"
+            state.add_log(f"Joined voice chat: {joined_count}/{len(state.accounts)} accounts active.")
             return True
         else:
             state.status_message = "Join failed for all accounts"
@@ -334,9 +389,9 @@ async def join_live_call_immediate():
 
 
 async def leave_live_call():
-    """Leaves the voice chat for all 4 accounts and cancels all scheduled joins."""
+    """Leaves the voice chat for all 9 accounts and cancels all scheduled joins."""
     async with state.join_lock:
-        state.add_log("Leaving live voice chat for all 4 accounts...")
+        state.add_log("Leaving live voice chat for all 9 accounts...")
         await asyncio.gather(*[leave_account_call(acc) for acc in state.accounts], return_exceptions=True)
         state.status_message = "Standby - Waiting for live stream"
         state.add_log("All accounts left call. Waiting for next live session.")
@@ -344,7 +399,7 @@ async def leave_live_call():
 
 async def auto_join_monitor_loop():
     """Resilient internal loop that continuously monitors the channel, auto-schedules random 90s-180s delayed joins, and heals drops."""
-    state.add_log(f"Internal 4-account auto-join loop engaged (Random Delay: {MIN_JOIN_DELAY_SECONDS}s-{MAX_JOIN_DELAY_SECONDS}s).")
+    state.add_log(f"Internal 9-account auto-join loop engaged (Random Delay: {MIN_JOIN_DELAY_SECONDS}s-{MAX_JOIN_DELAY_SECONDS}s).")
     while True:
         try:
             is_active, call_id = await check_channel_call()
@@ -374,9 +429,9 @@ async def auto_join_monitor_loop():
                 joined_count = sum(1 for acc in state.accounts if acc.is_joined)
                 pending_count = sum(1 for acc in state.accounts if acc.scheduled_join_time and not acc.is_joined)
                 if joined_count > 0:
-                    state.status_message = f"Live - {joined_count}/4 accounts joined ({pending_count} pending delay)"
+                    state.status_message = f"Live - {joined_count}/{len(state.accounts)} accounts joined ({pending_count} pending delay)"
                 else:
-                    state.status_message = f"Live detected - {pending_count}/4 accounts scheduled (90s-180s delay)"
+                    state.status_message = f"Live detected - {pending_count}/{len(state.accounts)} accounts scheduled (90s-180s delay)"
             else:
                 any_joined = any(acc.is_joined for acc in state.accounts)
                 any_pending = any(acc.scheduled_join_time for acc in state.accounts)
@@ -422,7 +477,7 @@ async def render_keep_alive_loop():
 
 
 # ==================== FASTAPI WEB APPLICATION ====================
-app = FastAPI(title="Telegram 4-Account Live Voice Relay")
+app = FastAPI(title="Telegram 9-Account Live Voice Relay")
 
 
 @app.on_event("startup")
@@ -430,7 +485,7 @@ async def startup_event():
     # 1. Start TCP audio streamer ingest
     await start_tcp_server()
 
-    # 2. Start Telethon Clients and PyTgCalls engines for all 4 accounts
+    # 2. Start Telethon Clients and PyTgCalls engines for all 9 accounts
     for acc in state.accounts:
         try:
             state.add_log(f"Authenticating Account #{acc.index} ({acc.name})...")
@@ -552,15 +607,16 @@ async def stream_audio(request: Request):
 @app.get("/health")
 async def health_check():
     uptime = int(time.time() - state.start_time)
+    total_accs = len(state.accounts)
     connected_accounts = sum(1 for acc in state.accounts if acc.client and acc.client.is_connected())
     joined_accounts = sum(1 for acc in state.accounts if acc.is_joined)
     pending_accounts = sum(1 for acc in state.accounts if acc.scheduled_join_time and not acc.is_joined)
     return JSONResponse({
         "status": "healthy",
         "uptime_seconds": uptime,
-        "accounts_connected": f"{connected_accounts}/4",
-        "accounts_joined": f"{joined_accounts}/4",
-        "accounts_pending_delay": f"{pending_accounts}/4",
+        "accounts_connected": f"{connected_accounts}/{total_accs}",
+        "accounts_joined": f"{joined_accounts}/{total_accs}",
+        "accounts_pending_delay": f"{pending_accounts}/{total_accs}",
         "is_call_active": state.is_call_active,
         "listeners": state.listeners_count,
         "channel_title": state.channel_title,
@@ -610,7 +666,7 @@ async def manual_join():
     if not is_active:
         return JSONResponse({"success": False, "message": "No active live stream in channel."})
     success = await join_live_call_immediate()
-    return JSONResponse({"success": success, "message": "Joined call immediately from 4 accounts" if success else "Failed to join"})
+    return JSONResponse({"success": success, "message": f"Joined call immediately from {len(state.accounts)} accounts" if success else "Failed to join"})
 
 
 @app.post("/api/leave")
@@ -625,7 +681,7 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JOINLIVE // 4-ACCOUNT VOICE RELAY</title>
+    <title>JOINLIVE // 9-ACCOUNT VOICE RELAY</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -696,7 +752,7 @@ HTML_PAGE = """<!DOCTYPE html>
         /* Main Container */
         .container {
             width: 94%;
-            max-width: 1080px;
+            max-width: 1120px;
             margin-top: 28px;
             display: flex;
             flex-direction: column;
@@ -809,7 +865,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
         .accounts-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 14px;
             margin-top: 8px;
         }
@@ -820,7 +876,7 @@ HTML_PAGE = """<!DOCTYPE html>
             }
         }
 
-        @media (max-width: 540px) {
+        @media (max-width: 560px) {
             .accounts-grid {
                 grid-template-columns: 1fr;
             }
@@ -1298,7 +1354,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Top Running Marquee -->
     <div class="marquee-banner">
         <div class="marquee-content">
-            ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ 4-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
+            ⚡ 9-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ 9-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
         </div>
     </div>
 
@@ -1308,7 +1364,7 @@ HTML_PAGE = """<!DOCTYPE html>
             <div class="header-title-group">
                 <div class="app-badge">🎙️</div>
                 <div class="header-text">
-                    <h1>JOINLIVE // 4-ACCOUNT STUDIO</h1>
+                    <h1>JOINLIVE // 9-ACCOUNT STUDIO</h1>
                     <p>TELETHON + PYTGCALLS VOICE RELAY (90s - 180s RANDOM DELAY)</p>
                 </div>
             </div>
@@ -1318,9 +1374,9 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
         </header>
 
-        <!-- 4-Accounts Status Pool -->
+        <!-- 9-Accounts Status Pool -->
         <div class="neo-box accounts-container">
-            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 04 ACCOUNTS (90s-180s DELAY)</div>
+            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 09 ACCOUNTS (90s-180s DELAY)</div>
             <div class="accounts-grid" id="accountsGrid">
                 <!-- Injected via JS -->
             </div>
@@ -1393,7 +1449,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     </div>
                     <div class="stat-card yellow">
                         <div class="stat-label">JOINED ACCOUNTS</div>
-                        <div class="stat-value" id="metricJoined">0 / 4</div>
+                        <div class="stat-value" id="metricJoined">0 / 9</div>
                     </div>
                     <div class="stat-card cyan">
                         <div class="stat-label">DELAY RANGE</div>
@@ -1426,7 +1482,7 @@ HTML_PAGE = """<!DOCTYPE html>
         </div>
 
         <footer>
-            JOINLIVE STUDIO &bull; 4-ACCOUNT TELEGRAM LIVE RELAY &bull; TELETHON & PYTGCALLS
+            JOINLIVE STUDIO &bull; 9-ACCOUNT TELEGRAM LIVE RELAY &bull; TELETHON & PYTGCALLS
         </footer>
     </div>
 
@@ -1514,7 +1570,7 @@ HTML_PAGE = """<!DOCTYPE html>
                 const badgeText = document.getElementById('liveBadgeText');
                 if (data.is_joined) {
                     badge.className = 'status-pill live';
-                    badgeText.textContent = `STREAMING (${data.joined_accounts_count}/4 ACCOUNTS)`;
+                    badgeText.textContent = `STREAMING (${data.joined_accounts_count}/${data.total_accounts} ACCOUNTS)`;
                 } else if (data.is_call_active) {
                     badge.className = 'status-pill standby';
                     badgeText.textContent = `LIVE ACTIVE (${data.pending_accounts_count} IN 90s-180s DELAY)`;
@@ -1555,11 +1611,12 @@ HTML_PAGE = """<!DOCTYPE html>
                             statusText = '🟡 READY';
                         }
 
+                        const idxStr = acc.index < 10 ? `0${acc.index}` : `${acc.index}`;
                         return `
                             <div class="account-card ${cardClass}">
                                 <div class="acc-top">
                                     <span class="acc-role-badge ${roleClass}">${roleText}</span>
-                                    <span style="font-size:0.75rem; font-weight:800; font-family:'Space Mono'">#0${acc.index}</span>
+                                    <span style="font-size:0.75rem; font-weight:800; font-family:'Space Mono'">#${idxStr}</span>
                                 </div>
                                 <div class="acc-name">${acc.name}</div>
                                 <div class="acc-id">ID: ${acc.user_id || 'Connecting...'}</div>
