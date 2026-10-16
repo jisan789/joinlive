@@ -3,6 +3,7 @@ import collections
 import logging
 import os
 import random
+import re
 import sys
 import time
 from typing import List, Set
@@ -30,114 +31,9 @@ RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
 MIN_JOIN_DELAY_SECONDS = int(os.environ.get("MIN_JOIN_DELAY_SECONDS", 90))  # 90 seconds (1.5 min)
 MAX_JOIN_DELAY_SECONDS = int(os.environ.get("MAX_JOIN_DELAY_SECONDS", 180))  # 180 seconds (3 min)
 
-# 9 Configured Accounts (Account 1 is the Master Audio Streamer, 2-9 join alongside)
-ACCOUNTS_CONFIG = [
-    {
-        "index": 1,
-        "name": "Sakib",
-        "api_id": int(os.environ.get("API_ID_1", os.environ.get("API_ID", 27634392))),
-        "api_hash": os.environ.get("API_HASH_1", os.environ.get("API_HASH", "c29325ca5de227dc611e54d355f76896")),
-        "session": os.environ.get(
-            "SESSION_1",
-            os.environ.get(
-                "SESSION",
-                "1BVtsOGwBu1N9KLlJxcAJFGzeqvLDS-V27RPGJ3w9Crn4P40Atgq6WKp8rRme_vMwel4Tsgt_0jEVg3ohNqmw78yl99EovYsg0P1"
-                "eahpo7f1k0NsTJ7OmKOZldPfJg1JRXHIhZXVl9MsKSzRGaMq2htOkGTevFQ5Kahurj7heaGOhvN8F3qWNPSWjm0xPX9qwju2qXSE"
-                "G6eSZNx-QNO2WIyGrf9KvhldqARB4GL6utk2e3usuIqF9QRLyLWgAlVyTGkQPaAnNp0QJfcmVh1fW1JpSt8nnWcOypVslfDyDY9O"
-                "376fspGb_Jxve12GKYOBXq94g3KR0jvvmDPIjOeS_7_wb7BIpREw="
-            )
-        ),
-        "is_recorder": True,
-    },
-    {
-        "index": 2,
-        "name": "Mahin",
-        "api_id": int(os.environ.get("API_ID_2", 32821627)),
-        "api_hash": os.environ.get("API_HASH_2", "45a260ea58881b721d909c74e40adcbd"),
-        "session": os.environ.get(
-            "SESSION_2",
-            "1BVtsOGwBuz97tJLwZ_DRPNtA0UNw3aqGbF_1vATiPa2YVhIkF8lon9RqStdX3Q9wqt020r7wplavfqxGEiezhBH8tqkER2B1da591h-TepIsoTNjJPMVGhHAGf9rfnuehnfCO84u8jzun2pxJMN6yCQ1GkQ2LRwGK4Kj0X7rf9RdI2v-TnjQ-sK_ED-fekYQS4BHM80QOHHjyuRhj0SrTHGIzqoHTzV4yeYXXxMlYBpJtEjJoBcCnHnTBo27ARx_mM8Q6ucArrbHKeLd-lCCHirP1f7cxONqUUknZV-ZOIcx31cREKMgOhB4nEBBu-dkfUIolGT2Q9MppVN2LUbekzIrdGG3-pQ="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 3,
-        "name": "Rana",
-        "api_id": int(os.environ.get("API_ID_3", 33591633)),
-        "api_hash": os.environ.get("API_HASH_3", "a4e0dc8c681a8c6afe6124140b163768"),
-        "session": os.environ.get(
-            "SESSION_3",
-            "1BVtsOGwBuwKDPeuKNy2P6M5z2RWXitz9okHn35hEMdbM4UJqrNjEiQRAIl3TJNpd_1rz6o6Lo_mGOCS04CAon-qmH8vsOedujp7vMxHamJ_er8HO8fKocsoH1RzQSEe4-uPsclEgMrGFgQo1TLbPVmzS8-MhZmMpN5JArFVwVwdQax9X0eDOT66j2R-xxJg705BnfQ3eyiIrGJdmPYn98zmr4uvLOVo8fXmhiYL_w9ElNRZQ2HIMoAcn7yMF21JWoWaf3eRdK_nZULbdDWZivVvmGtIydaOfKW-xX2cEMeu3AUJH6z34z_QFuIq79u0PXqjO16HKz9-tDdA8GxkiHZMGx3lwQWY="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 4,
-        "name": "Sevou",
-        "api_id": int(os.environ.get("API_ID_4", 35126153)),
-        "api_hash": os.environ.get("API_HASH_4", "a95d613cee72019ccb984d8686c3e592"),
-        "session": os.environ.get(
-            "SESSION_4",
-            "1BVtsOGwBuxTz-8TYWd-9IZVuW-PsEXNzGdrDeb0DoMN0AL9yp_oYb0TRdLW3cqA1JGDradwF4VBpO3Rd_YxPIGuq_Nqg1gkH4bGtMkxhTCEGvNlc5aNXz2Hk5aCJPf2GgjSuKdMTiKFOwGEJt8yjXes0pI5wDSGxl1kjmBK-c9aHZSgFyhVvjoovLLxpzRKJIR4D5GRRQgK-hO1ayfJSIxc1TPqSe6gWnj_8JzRcXt8MvXmCp2umlDn82bfE8OkuwL-uYkO8VkANK6dGi5Udgb41qSKYLhRJ3H8avdlviEz8W-ZInbiJyAFHx8dosnaeaCfoHs6YJ5b7YrAPjI1Qxjpk4_n9S8U="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 5,
-        "name": "Zoroo",
-        "api_id": int(os.environ.get("API_ID_5", 30538685)),
-        "api_hash": os.environ.get("API_HASH_5", "1d5b6b83069a4daf61865f9044177ea8"),
-        "session": os.environ.get(
-            "SESSION_5",
-            "1BVtsOGwBu5fwCYhIg7O2HuCnvef1hBennYEHs3rSeSuUoTA1f24f0Qjq9bwx2W08rKkA5jNBLdvwTzY8LUz3b437OYyun3mv26rPMSDfXikc_LyVvfUdv4-VkJZ4pmxufMonMj0aJBZGqeJDIWrGWbGazIUWHASRHkNdLVb_MfLpciXbS2Y9zY_bnPDLTE8N41DLRS0NO1JnjFOejID21L3g5ydTLi05j3bKGfV_KsxQFWW1qUIxmZJWbhSPpTZ5tadyqMscGUvKww4q3lqOjv9aLu_AWN_v913Uxlpbr8GIyHFulZRcLMlztI9R_nwkp7U1Y8p6Xd5xebMs9oYkC0LEpar1SGs="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 6,
-        "name": "Fuego FF",
-        "api_id": int(os.environ.get("API_ID_6", 33497150)),
-        "api_hash": os.environ.get("API_HASH_6", "fe085f2625dd413cf9222e877bffb9d4"),
-        "session": os.environ.get(
-            "SESSION_6",
-            "1BVtsOGwBu7E239PpoxhLiuxrIBksx_B3p3nr8LGzXHELlfDtt1E506HU_G5Ma1Yc-tRXtBC8nlcHgJTc8xza7SjRZKfA_84m7_eqKsEntHy0eq5OzxsL7qJlYWsTfuoZ_L_xHqpF5YEIEhAnfwQQB_itB5P-18yIDEzq5RRkdF7KxLhbnBmsRXOvXXdvRhHCbw9dAZPyqpzrkXkABBEk0wa-t94EtG-dJIe5A7Nb7wFI4_TB8MOp3BG6Wagy7TOqse3gQb8KqPUb6hj-a8uaAq8qUZsL9bVFI1_qTHkiNAlkXiaViXAEEhxlROnUDYd8WzqedHbyVajW-zKswZtGmjtI2JDdX0k="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 7,
-        "name": "Ntz",
-        "api_id": int(os.environ.get("API_ID_7", 35936725)),
-        "api_hash": os.environ.get("API_HASH_7", "883ed929ecbc1ead59ca25dbec99b1d5"),
-        "session": os.environ.get(
-            "SESSION_7",
-            "1BVtsOGwBu3QfGUilzcBH4y6-vgEdI55-c3t3ItHVuwhP8jtVDIYDbiUnRII4MhXaauC-OjzaLGGJ0Pp8YqlIxFMgv5puUUyf_wao3gzWns8O9m6ysWnaPXYvIr-D2jjq_6kDP8PP61oXQbIwzXRE9YIcZFs_rdopCsuMtWP-HR2B6OzScRhRodFEHS-9aZAUBJWah0trOw9ecPSZDHh5g4GmSgxZLKWMwW6RAcAySX_Kcw5e6QkFsb6pG6kVlr5tOonC1x8QoX4QSOoW87r3KGSqzplEdXeABXqBJ6MY15OD7vLCPc9TsvxWpDA_baTcajxUWEb3kzXQa3c2x6CLh96k5z0Jeyk="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 8,
-        "name": "Abdul",
-        "api_id": int(os.environ.get("API_ID_8", 37091597)),
-        "api_hash": os.environ.get("API_HASH_8", "a35558ba13a2f4d19a5f6523c9d8aba8"),
-        "session": os.environ.get(
-            "SESSION_8",
-            "1BVtsOGwBu3fLeWpMuvbfpT1wfsn6qRyzD0OxJxgM1u29F8CTbZzcThv3H7K5VOBSN9bkxcnmj2siqklhsDGxXdnZZxdJnFpVia5Gm1BH5sGFkLxWcREY7dKH2GVFI9MrJ5Fv-4gVHxd41JRnnSXw1jGgkwHhOd-fYVDRZzJ1-TbBexdbknBKzYJcwQM18k1SIoisxFl0NuCur6JlpR3cBK6XQualJmtv371kCF5wcrQ1slNqPwLpqxcusKKAr8JOi3yYjANuJc4qCn5CZkZ0_TpaxduXJU0RJEEXbDOBww8lF3dmPN7aU5KHohw67sNupOQFopCL9uzRi-sLUJPM4Yv3arJP2pY="
-        ),
-        "is_recorder": False,
-    },
-    {
-        "index": 9,
-        "name": "Jerin",
-        "api_id": int(os.environ.get("API_ID_9", 30249688)),
-        "api_hash": os.environ.get("API_HASH_9", "3ae477cb289d7025540ea28c4a6d537d"),
-        "session": os.environ.get(
-            "SESSION_9",
-            "1BVtsOGwBuzbUMBBXeOMltxfcy7RKO8POYLJDaqzdsubqFiSZWNFsrENFN6b9YeI0kvBiqgxUWK0rMn9mvYSEQs3Wbw1c5b0oiPzPI64G6oINTUqT-S4U8Ckzq9C0Q_ILo8m_whJNq3CRnbJt1QdAWVE_DmtQ5tbvc07AM6BNVPJnDqyeQM118T56HXSb3ykuHS2ZVWtu1fQEQzwB23G3PBXMgpxxFTWYQDxvn_SPuLnxOoC8BbteQrWv2TgiKP1NMjUNtbvodPcwjAcZkVAX8nivkL-3PhGo1RNs3OdQGMAD30_yrOBFaZK5qyUWHfTvNE0Y9pJZOjw41gfc0rjUD2C34fpde2w="
-        ),
-        "is_recorder": False,
-    },
-]
+# Standard Shared Telegram API Credentials (Single App API ID & Hash for all accounts)
+API_ID = int(os.environ.get("API_ID", 27634392))
+API_HASH = os.environ.get("API_HASH", "c29325ca5de227dc611e54d355f76896")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -145,14 +41,110 @@ logging.basicConfig(
 )
 logger = logging.getLogger("JoinLiveApp")
 
+# ==================== DYNAMIC MULTI-ACCOUNT HANDLER ====================
+DEFAULT_ACCOUNTS = [
+    {"name": "Sakib", "session": "1BVtsOGwBu1N9KLlJxcAJFGzeqvLDS-V27RPGJ3w9Crn4P40Atgq6WKp8rRme_vMwel4Tsgt_0jEVg3ohNqmw78yl99EovYsg0P1eahpo7f1k0NsTJ7OmKOZldPfJg1JRXHIhZXVl9MsKSzRGaMq2htOkGTevFQ5Kahurj7heaGOhvN8F3qWNPSWjm0xPX9qwju2qXSEG6eSZNx-QNO2WIyGrf9KvhldqARB4GL6utk2e3usuIqF9QRLyLWgAlVyTGkQPaAnNp0QJfcmVh1fW1JpSt8nnWcOypVslfDyDY9O376fspGb_Jxve12GKYOBXq94g3KR0jvvmDPIjOeS_7_wb7BIpREw="},
+    {"name": "Mahin", "session": "1BVtsOGwBuz97tJLwZ_DRPNtA0UNw3aqGbF_1vATiPa2YVhIkF8lon9RqStdX3Q9wqt020r7wplavfqxGEiezhBH8tqkER2B1da591h-TepIsoTNjJPMVGhHAGf9rfnuehnfCO84u8jzun2pxJMN6yCQ1GkQ2LRwGK4Kj0X7rf9RdI2v-TnjQ-sK_ED-fekYQS4BHM80QOHHjyuRhj0SrTHGIzqoHTzV4yeYXXxMlYBpJtEjJoBcCnHnTBo27ARx_mM8Q6ucArrbHKeLd-lCCHirP1f7cxONqUUknZV-ZOIcx31cREKMgOhB4nEBBu-dkfUIolGT2Q9MppVN2LUbekzIrdGG3-pQ="},
+    {"name": "Rana", "session": "1BVtsOGwBuwKDPeuKNy2P6M5z2RWXitz9okHn35hEMdbM4UJqrNjEiQRAIl3TJNpd_1rz6o6Lo_mGOCS04CAon-qmH8vsOedujp7vMxHamJ_er8HO8fKocsoH1RzQSEe4-uPsclEgMrGFgQo1TLbPVmzS8-MhZmMpN5JArFVwVwdQax9X0eDOT66j2R-xxJg705BnfQ3eyiIrGJdmPYn98zmr4uvLOVo8fXmhiYL_w9ElNRZQ2HIMoAcn7yMF21JWoWaf3eRdK_nZULbdDWZivVvmGtIydaOfKW-xX2cEMeu3AUJH6z34z_QFuIq79u0PXqjO16HKz9-tDdA8GxkiHZMGx3lwQWY="},
+    {"name": "Sevou", "session": "1BVtsOGwBuxTz-8TYWd-9IZVuW-PsEXNzGdrDeb0DoMN0AL9yp_oYb0TRdLW3cqA1JGDradwF4VBpO3Rd_YxPIGuq_Nqg1gkH4bGtMkxhTCEGvNlc5aNXz2Hk5aCJPf2GgjSuKdMTiKFOwGEJt8yjXes0pI5wDSGxl1kjmBK-c9aHZSgFyhVvjoovLLxpzRKJIR4D5GRRQgK-hO1ayfJSIxc1TPqSe6gWnj_8JzRcXt8MvXmCp2umlDn82bfE8OkuwL-uYkO8VkANK6dGi5Udgb41qSKYLhRJ3H8avdlviEz8W-ZInbiJyAFHx8dosnaeaCfoHs6YJ5b7YrAPjI1Qxjpk4_n9S8U="},
+    {"name": "Zoroo", "session": "1BVtsOGwBu5fwCYhIg7O2HuCnvef1hBennYEHs3rSeSuUoTA1f24f0Qjq9bwx2W08rKkA5jNBLdvwTzY8LUz3b437OYyun3mv26rPMSDfXikc_LyVvfUdv4-VkJZ4pmxufMonMj0aJBZGqeJDIWrGWbGazIUWHASRHkNdLVb_MfLpciXbS2Y9zY_bnPDLTE8N41DLRS0NO1JnjFOejID21L3g5ydTLi05j3bKGfV_KsxQFWW1qUIxmZJWbhSPpTZ5tadyqMscGUvKww4q3lqOjv9aLu_AWN_v913Uxlpbr8GIyHFulZRcLMlztI9R_nwkp7U1Y8p6Xd5xebMs9oYkC0LEpar1SGs="},
+    {"name": "Fuego FF", "session": "1BVtsOGwBu7E239PpoxhLiuxrIBksx_B3p3nr8LGzXHELlfDtt1E506HU_G5Ma1Yc-tRXtBC8nlcHgJTc8xza7SjRZKfA_84m7_eqKsEntHy0eq5OzxsL7qJlYWsTfuoZ_L_xHqpF5YEIEhAnfwQQB_itB5P-18yIDEzq5RRkdF7KxLhbnBmsRXOvXXdvRhHCbw9dAZPyqpzrkXkABBEk0wa-t94EtG-dJIe5A7Nb7wFI4_TB8MOp3BG6Wagy7TOqse3gQb8KqPUb6hj-a8uaAq8qUZsL9bVFI1_qTHkiNAlkXiaViXAEEhxlROnUDYd8WzqedHbyVajW-zKswZtGmjtI2JDdX0k="},
+    {"name": "Ntz", "session": "1BVtsOGwBu3QfGUilzcBH4y6-vgEdI55-c3t3ItHVuwhP8jtVDIYDbiUnRII4MhXaauC-OjzaLGGJ0Pp8YqlIxFMgv5puUUyf_wao3gzWns8O9m6ysWnaPXYvIr-D2jjq_6kDP8PP61oXQbIwzXRE9YIcZFs_rdopCsuMtWP-HR2B6OzScRhRodFEHS-9aZAUBJWah0trOw9ecPSZDHh5g4GmSgxZLKWMwW6RAcAySX_Kcw5e6QkFsb6pG6kVlr5tOonC1x8QoX4QSOoW87r3KGSqzplEdXeABXqBJ6MY15OD7vLCPc9TsvxWpDA_baTcajxUWEb3kzXQa3c2x6CLh96k5z0Jeyk="},
+    {"name": "Abdul", "session": "1BVtsOGwBu3fLeWpMuvbfpT1wfsn6qRyzD0OxJxgM1u29F8CTbZzcThv3H7K5VOBSN9bkxcnmj2siqklhsDGxXdnZZxdJnFpVia5Gm1BH5sGFkLxWcREY7dKH2GVFI9MrJ5Fv-4gVHxd41JRnnSXw1jGgkwHhOd-fYVDRZzJ1-TbBexdbknBKzYJcwQM18k1SIoisxFl0NuCur6JlpR3cBK6XQualJmtv371kCF5wcrQ1slNqPwLpqxcusKKAr8JOi3yYjANuJc4qCn5CZkZ0_TpaxduXJU0RJEEXbDOBww8lF3dmPN7aU5KHohw67sNupOQFopCL9uzRi-sLUJPM4Yv3arJP2pY="},
+    {"name": "Jerin", "session": "1BVtsOGwBuzbUMBBXeOMltxfcy7RKO8POYLJDaqzdsubqFiSZWNFsrENFN6b9YeI0kvBiqgxUWK0rMn9mvYSEQs3Wbw1c5b0oiPzPI64G6oINTUqT-S4U8Ckzq9C0Q_ILo8m_whJNq3CRnbJt1QdAWVE_DmtQ5tbvc07AM6BNVPJnDqyeQM118T56HXSb3ykuHS2ZVWtu1fQEQzwB23G3PBXMgpxxFTWYQDxvn_SPuLnxOoC8BbteQrWv2TgiKP1NMjUNtbvodPcwjAcZkVAX8nivkL-3PhGo1RNs3OdQGMAD30_yrOBFaZK5qyUWHfTvNE0Y9pJZOjw41gfc0rjUD2C34fpde2w="},
+]
+
+
+def load_accounts_config() -> List[dict]:
+    """
+    Dynamically loads and configures Telegram accounts based on provided session keys.
+    Automatically scales up or down based on how many session keys are added or removed:
+    - Numbered env vars (SESSION_1, SESSION_2, ..., SESSION_N)
+    - Bulk env var (SESSIONS, SESSION_KEYS, TELEGRAM_SESSIONS) - newline or comma separated
+    - Single env var (SESSION)
+    - Optional local file (sessions.txt)
+    - Falls back to built-in pool only if no custom session keys are set anywhere
+    """
+    discovered: List[dict] = []
+    seen_sessions = set()
+
+    # 1. Bulk sessions env var (newlines or commas)
+    bulk = os.environ.get("SESSIONS") or os.environ.get("SESSION_KEYS") or os.environ.get("TELEGRAM_SESSIONS")
+    if bulk:
+        for item in re.split(r"[\r\n,]+", bulk.strip()):
+            s = item.strip()
+            if s and s not in seen_sessions:
+                seen_sessions.add(s)
+                discovered.append({"session": s, "name": f"Account #{len(discovered) + 1}"})
+
+    # 2. Numbered env vars: SESSION_1, SESSION_2, ..., SESSION_N
+    numbered = []
+    for k in os.environ:
+        if k.startswith("SESSION_"):
+            suffix = k[len("SESSION_"):]
+            if suffix.isdigit():
+                numbered.append((int(suffix), k))
+
+    numbered.sort(key=lambda x: x[0])
+    for num, k in numbered:
+        val = os.environ.get(k, "").strip()
+        if val and val not in seen_sessions:
+            seen_sessions.add(val)
+            name_override = os.environ.get(f"ACCOUNT_NAME_{num}", f"Account #{num}")
+            discovered.append({"session": val, "name": name_override})
+
+    # 3. Single SESSION env var
+    single = os.environ.get("SESSION", "").strip()
+    if single and single not in seen_sessions:
+        seen_sessions.add(single)
+        name_override = os.environ.get("ACCOUNT_NAME_1", "Account #1")
+        discovered.insert(0, {"session": single, "name": name_override})
+
+    # 4. Optional local sessions.txt file
+    if not discovered and os.path.isfile("sessions.txt"):
+        try:
+            with open("sessions.txt", "r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if s and not s.startswith("#") and s not in seen_sessions:
+                        seen_sessions.add(s)
+                        discovered.append({"session": s, "name": f"Account #{len(discovered) + 1}"})
+        except Exception as e:
+            logger.warning(f"Error reading sessions.txt: {e}")
+
+    # 5. If sessions were discovered dynamically, use ONLY those sessions!
+    recorder_idx = int(os.environ.get("RECORDER_ACCOUNT_INDEX", 1))
+    if discovered:
+        accounts = []
+        for idx, item in enumerate(discovered, start=1):
+            accounts.append({
+                "index": idx,
+                "name": item.get("name", f"Account #{idx}"),
+                "session": item["session"],
+                "is_recorder": (idx == recorder_idx),
+            })
+        return accounts
+
+    # 6. Fallback pool: Used only if no custom session keys are set anywhere
+    accounts = []
+    for idx, item in enumerate(DEFAULT_ACCOUNTS, start=1):
+        accounts.append({
+            "index": idx,
+            "name": item["name"],
+            "session": item["session"],
+            "is_recorder": (idx == recorder_idx),
+        })
+    return accounts
+
+
+ACCOUNTS_CONFIG = load_accounts_config()
+
 
 # ==================== ACCOUNT & APP STATE ====================
 class AccountState:
-    def __init__(self, index: int, name: str, api_id: int, api_hash: str, session: str, is_recorder: bool):
+    def __init__(self, index: int, name: str, session: str, is_recorder: bool):
         self.index = index
         self.name = name
-        self.api_id = api_id
-        self.api_hash = api_hash
         self.session_str = session
         self.is_recorder = is_recorder
         self.client: TelegramClient | None = None
@@ -173,8 +165,6 @@ class AppState:
             AccountState(
                 cfg["index"],
                 cfg["name"],
-                cfg["api_id"],
-                cfg["api_hash"],
                 cfg["session"],
                 cfg["is_recorder"],
             )
@@ -189,7 +179,7 @@ class AppState:
         self.header_buffer = collections.deque(maxlen=16)
         self.tcp_server = None
         self.recent_logs = collections.deque(maxlen=40)
-        self.status_message = "Initializing 9 accounts..."
+        self.status_message = f"Initializing {len(self.accounts)} accounts..."
         self.join_lock = asyncio.Lock()
         self.last_stream_time = 0
         self.consecutive_errors = 0
@@ -364,9 +354,9 @@ async def leave_account_call(acc: AccountState):
 
 
 async def join_live_call_immediate():
-    """Forces immediate join for all 9 accounts (e.g. from manual trigger)."""
+    """Forces immediate join for all configured accounts (e.g. from manual trigger)."""
     async with state.join_lock:
-        state.add_log("Triggering immediate join for all 9 accounts...")
+        state.add_log(f"Triggering immediate join for all {len(state.accounts)} accounts...")
         state.status_message = "Joining live stream (all accounts)..."
 
         # Cancel any scheduled delays
@@ -389,9 +379,9 @@ async def join_live_call_immediate():
 
 
 async def leave_live_call():
-    """Leaves the voice chat for all 9 accounts and cancels all scheduled joins."""
+    """Leaves the voice chat for all accounts and cancels all scheduled joins."""
     async with state.join_lock:
-        state.add_log("Leaving live voice chat for all 9 accounts...")
+        state.add_log(f"Leaving live voice chat for all {len(state.accounts)} accounts...")
         await asyncio.gather(*[leave_account_call(acc) for acc in state.accounts], return_exceptions=True)
         state.status_message = "Standby - Waiting for live stream"
         state.add_log("All accounts left call. Waiting for next live session.")
@@ -399,7 +389,7 @@ async def leave_live_call():
 
 async def auto_join_monitor_loop():
     """Resilient internal loop that continuously monitors the channel, auto-schedules random 90s-180s delayed joins, and heals drops."""
-    state.add_log(f"Internal 9-account auto-join loop engaged (Random Delay: {MIN_JOIN_DELAY_SECONDS}s-{MAX_JOIN_DELAY_SECONDS}s).")
+    state.add_log(f"Internal multi-account auto-join loop engaged ({len(state.accounts)} accounts, Random Delay: {MIN_JOIN_DELAY_SECONDS}s-{MAX_JOIN_DELAY_SECONDS}s).")
     while True:
         try:
             is_active, call_id = await check_channel_call()
@@ -477,7 +467,7 @@ async def render_keep_alive_loop():
 
 
 # ==================== FASTAPI WEB APPLICATION ====================
-app = FastAPI(title="Telegram 9-Account Live Voice Relay")
+app = FastAPI(title="Telegram Multi-Account Live Voice Relay")
 
 
 @app.on_event("startup")
@@ -485,17 +475,19 @@ async def startup_event():
     # 1. Start TCP audio streamer ingest
     await start_tcp_server()
 
-    # 2. Start Telethon Clients and PyTgCalls engines for all 9 accounts
+    # 2. Start Telethon Clients and PyTgCalls engines for all configured accounts
+    state.add_log(f"Starting {len(state.accounts)} configured Telegram account(s)...")
     for acc in state.accounts:
         try:
             state.add_log(f"Authenticating Account #{acc.index} ({acc.name})...")
-            client = TelegramClient(StringSession(acc.session_str), acc.api_id, acc.api_hash)
+            client = TelegramClient(StringSession(acc.session_str), API_ID, API_HASH)
             await client.start()
             acc.client = client
 
             me = await client.get_me()
             acc.user_id = me.id
             acc.display_name = f"{me.first_name} (ID: {me.id})"
+            acc.name = me.first_name or acc.name
             acc.is_connected = True
             state.add_log(f"Account #{acc.index} connected as: {acc.display_name}")
 
@@ -681,7 +673,7 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JOINLIVE // 9-ACCOUNT VOICE RELAY</title>
+    <title>JOINLIVE // MULTI-ACCOUNT VOICE RELAY</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -1354,7 +1346,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Top Running Marquee -->
     <div class="marquee-banner">
         <div class="marquee-content">
-            ⚡ 9-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ 9-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
+            ⚡ MULTI-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 📻 DIRECT WEB STREAM (PORT 8000) &nbsp;&bull;&nbsp; ⚡ NATURAL DELAYED VOICE JOIN &nbsp;&bull;&nbsp; ⚡ MULTI-ACCOUNT TELEGRAM VOICE RELAY // RANDOM 90s-180s DELAY ACTIVE &nbsp;&bull;&nbsp; 🚀 PYTGCALLS v3.0 MULTI-CLIENT &nbsp;&bull;&nbsp; 
         </div>
     </div>
 
@@ -1364,8 +1356,8 @@ HTML_PAGE = """<!DOCTYPE html>
             <div class="header-title-group">
                 <div class="app-badge">🎙️</div>
                 <div class="header-text">
-                    <h1>JOINLIVE // 9-ACCOUNT STUDIO</h1>
-                    <p>TELETHON + PYTGCALLS VOICE RELAY (90s - 180s RANDOM DELAY)</p>
+                    <h1>JOINLIVE // MULTI-ACCOUNT STUDIO</h1>
+                    <p>DYNAMIC TELETHON + PYTGCALLS VOICE RELAY (90s - 180s RANDOM DELAY)</p>
                 </div>
             </div>
             <div id="liveBadge" class="status-pill standby">
@@ -1374,9 +1366,9 @@ HTML_PAGE = """<!DOCTYPE html>
             </div>
         </header>
 
-        <!-- 9-Accounts Status Pool -->
+        <!-- Dynamic Accounts Status Pool -->
         <div class="neo-box accounts-container">
-            <div class="card-tag" style="background: var(--neo-yellow);">ACCOUNT POOL // 09 ACCOUNTS (90s-180s DELAY)</div>
+            <div class="card-tag" id="poolTag" style="background: var(--neo-yellow);">ACCOUNT POOL // <span id="poolCountTag">--</span> ACCOUNTS (90s-180s DELAY)</div>
             <div class="accounts-grid" id="accountsGrid">
                 <!-- Injected via JS -->
             </div>
@@ -1449,7 +1441,7 @@ HTML_PAGE = """<!DOCTYPE html>
                     </div>
                     <div class="stat-card yellow">
                         <div class="stat-label">JOINED ACCOUNTS</div>
-                        <div class="stat-value" id="metricJoined">0 / 9</div>
+                        <div class="stat-value" id="metricJoined">0 / --</div>
                     </div>
                     <div class="stat-card cyan">
                         <div class="stat-label">DELAY RANGE</div>
@@ -1482,7 +1474,7 @@ HTML_PAGE = """<!DOCTYPE html>
         </div>
 
         <footer>
-            JOINLIVE STUDIO &bull; 9-ACCOUNT TELEGRAM LIVE RELAY &bull; TELETHON & PYTGCALLS
+            JOINLIVE STUDIO &bull; MULTI-ACCOUNT TELEGRAM LIVE RELAY &bull; TELETHON & PYTGCALLS
         </footer>
     </div>
 
@@ -1583,6 +1575,8 @@ HTML_PAGE = """<!DOCTYPE html>
                 document.getElementById('metricListeners').textContent = data.listeners_count;
                 document.getElementById('metricJoined').textContent = `${data.joined_accounts_count} / ${data.total_accounts}`;
                 document.getElementById('metricAudio').textContent = data.streaming_active ? 'STREAMING' : (data.is_joined ? 'CONNECTED' : 'STANDBY');
+                const poolCountTag = document.getElementById('poolCountTag');
+                if (poolCountTag) poolCountTag.textContent = data.total_accounts;
 
                 // Accounts Grid Rendering
                 const accGrid = document.getElementById('accountsGrid');
