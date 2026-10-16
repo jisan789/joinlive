@@ -42,30 +42,26 @@ logging.basicConfig(
 logger = logging.getLogger("JoinLiveApp")
 
 # ==================== DYNAMIC MULTI-ACCOUNT HANDLER ====================
-DEFAULT_ACCOUNTS = [
-    {"name": "Sakib", "session": "1BVtsOGwBu1N9KLlJxcAJFGzeqvLDS-V27RPGJ3w9Crn4P40Atgq6WKp8rRme_vMwel4Tsgt_0jEVg3ohNqmw78yl99EovYsg0P1eahpo7f1k0NsTJ7OmKOZldPfJg1JRXHIhZXVl9MsKSzRGaMq2htOkGTevFQ5Kahurj7heaGOhvN8F3qWNPSWjm0xPX9qwju2qXSEG6eSZNx-QNO2WIyGrf9KvhldqARB4GL6utk2e3usuIqF9QRLyLWgAlVyTGkQPaAnNp0QJfcmVh1fW1JpSt8nnWcOypVslfDyDY9O376fspGb_Jxve12GKYOBXq94g3KR0jvvmDPIjOeS_7_wb7BIpREw="},
-    {"name": "Mahin", "session": "1BVtsOGwBuz97tJLwZ_DRPNtA0UNw3aqGbF_1vATiPa2YVhIkF8lon9RqStdX3Q9wqt020r7wplavfqxGEiezhBH8tqkER2B1da591h-TepIsoTNjJPMVGhHAGf9rfnuehnfCO84u8jzun2pxJMN6yCQ1GkQ2LRwGK4Kj0X7rf9RdI2v-TnjQ-sK_ED-fekYQS4BHM80QOHHjyuRhj0SrTHGIzqoHTzV4yeYXXxMlYBpJtEjJoBcCnHnTBo27ARx_mM8Q6ucArrbHKeLd-lCCHirP1f7cxONqUUknZV-ZOIcx31cREKMgOhB4nEBBu-dkfUIolGT2Q9MppVN2LUbekzIrdGG3-pQ="},
-    {"name": "Rana", "session": "1BVtsOGwBuwKDPeuKNy2P6M5z2RWXitz9okHn35hEMdbM4UJqrNjEiQRAIl3TJNpd_1rz6o6Lo_mGOCS04CAon-qmH8vsOedujp7vMxHamJ_er8HO8fKocsoH1RzQSEe4-uPsclEgMrGFgQo1TLbPVmzS8-MhZmMpN5JArFVwVwdQax9X0eDOT66j2R-xxJg705BnfQ3eyiIrGJdmPYn98zmr4uvLOVo8fXmhiYL_w9ElNRZQ2HIMoAcn7yMF21JWoWaf3eRdK_nZULbdDWZivVvmGtIydaOfKW-xX2cEMeu3AUJH6z34z_QFuIq79u0PXqjO16HKz9-tDdA8GxkiHZMGx3lwQWY="},
-    {"name": "Sevou", "session": "1BVtsOGwBuxTz-8TYWd-9IZVuW-PsEXNzGdrDeb0DoMN0AL9yp_oYb0TRdLW3cqA1JGDradwF4VBpO3Rd_YxPIGuq_Nqg1gkH4bGtMkxhTCEGvNlc5aNXz2Hk5aCJPf2GgjSuKdMTiKFOwGEJt8yjXes0pI5wDSGxl1kjmBK-c9aHZSgFyhVvjoovLLxpzRKJIR4D5GRRQgK-hO1ayfJSIxc1TPqSe6gWnj_8JzRcXt8MvXmCp2umlDn82bfE8OkuwL-uYkO8VkANK6dGi5Udgb41qSKYLhRJ3H8avdlviEz8W-ZInbiJyAFHx8dosnaeaCfoHs6YJ5b7YrAPjI1Qxjpk4_n9S8U="},
-    {"name": "Zoroo", "session": "1BVtsOGwBu5fwCYhIg7O2HuCnvef1hBennYEHs3rSeSuUoTA1f24f0Qjq9bwx2W08rKkA5jNBLdvwTzY8LUz3b437OYyun3mv26rPMSDfXikc_LyVvfUdv4-VkJZ4pmxufMonMj0aJBZGqeJDIWrGWbGazIUWHASRHkNdLVb_MfLpciXbS2Y9zY_bnPDLTE8N41DLRS0NO1JnjFOejID21L3g5ydTLi05j3bKGfV_KsxQFWW1qUIxmZJWbhSPpTZ5tadyqMscGUvKww4q3lqOjv9aLu_AWN_v913Uxlpbr8GIyHFulZRcLMlztI9R_nwkp7U1Y8p6Xd5xebMs9oYkC0LEpar1SGs="},
-    {"name": "Fuego FF", "session": "1BVtsOGwBu7E239PpoxhLiuxrIBksx_B3p3nr8LGzXHELlfDtt1E506HU_G5Ma1Yc-tRXtBC8nlcHgJTc8xza7SjRZKfA_84m7_eqKsEntHy0eq5OzxsL7qJlYWsTfuoZ_L_xHqpF5YEIEhAnfwQQB_itB5P-18yIDEzq5RRkdF7KxLhbnBmsRXOvXXdvRhHCbw9dAZPyqpzrkXkABBEk0wa-t94EtG-dJIe5A7Nb7wFI4_TB8MOp3BG6Wagy7TOqse3gQb8KqPUb6hj-a8uaAq8qUZsL9bVFI1_qTHkiNAlkXiaViXAEEhxlROnUDYd8WzqedHbyVajW-zKswZtGmjtI2JDdX0k="},
-    {"name": "Ntz", "session": "1BVtsOGwBu3QfGUilzcBH4y6-vgEdI55-c3t3ItHVuwhP8jtVDIYDbiUnRII4MhXaauC-OjzaLGGJ0Pp8YqlIxFMgv5puUUyf_wao3gzWns8O9m6ysWnaPXYvIr-D2jjq_6kDP8PP61oXQbIwzXRE9YIcZFs_rdopCsuMtWP-HR2B6OzScRhRodFEHS-9aZAUBJWah0trOw9ecPSZDHh5g4GmSgxZLKWMwW6RAcAySX_Kcw5e6QkFsb6pG6kVlr5tOonC1x8QoX4QSOoW87r3KGSqzplEdXeABXqBJ6MY15OD7vLCPc9TsvxWpDA_baTcajxUWEb3kzXQa3c2x6CLh96k5z0Jeyk="},
-    {"name": "Abdul", "session": "1BVtsOGwBu3fLeWpMuvbfpT1wfsn6qRyzD0OxJxgM1u29F8CTbZzcThv3H7K5VOBSN9bkxcnmj2siqklhsDGxXdnZZxdJnFpVia5Gm1BH5sGFkLxWcREY7dKH2GVFI9MrJ5Fv-4gVHxd41JRnnSXw1jGgkwHhOd-fYVDRZzJ1-TbBexdbknBKzYJcwQM18k1SIoisxFl0NuCur6JlpR3cBK6XQualJmtv371kCF5wcrQ1slNqPwLpqxcusKKAr8JOi3yYjANuJc4qCn5CZkZ0_TpaxduXJU0RJEEXbDOBww8lF3dmPN7aU5KHohw67sNupOQFopCL9uzRi-sLUJPM4Yv3arJP2pY="},
-    {"name": "Jerin", "session": "1BVtsOGwBuzbUMBBXeOMltxfcy7RKO8POYLJDaqzdsubqFiSZWNFsrENFN6b9YeI0kvBiqgxUWK0rMn9mvYSEQs3Wbw1c5b0oiPzPI64G6oINTUqT-S4U8Ckzq9C0Q_ILo8m_whJNq3CRnbJt1QdAWVE_DmtQ5tbvc07AM6BNVPJnDqyeQM118T56HXSb3ykuHS2ZVWtu1fQEQzwB23G3PBXMgpxxFTWYQDxvn_SPuLnxOoC8BbteQrWv2TgiKP1NMjUNtbvodPcwjAcZkVAX8nivkL-3PhGo1RNs3OdQGMAD30_yrOBFaZK5qyUWHfTvNE0Y9pJZOjw41gfc0rjUD2C34fpde2w="},
+DEFAULT_SESSIONS = [
+    "1BVtsOGwBu1N9KLlJxcAJFGzeqvLDS-V27RPGJ3w9Crn4P40Atgq6WKp8rRme_vMwel4Tsgt_0jEVg3ohNqmw78yl99EovYsg0P1eahpo7f1k0NsTJ7OmKOZldPfJg1JRXHIhZXVl9MsKSzRGaMq2htOkGTevFQ5Kahurj7heaGOhvN8F3qWNPSWjm0xPX9qwju2qXSEG6eSZNx-QNO2WIyGrf9KvhldqARB4GL6utk2e3usuIqF9QRLyLWgAlVyTGkQPaAnNp0QJfcmVh1fW1JpSt8nnWcOypVslfDyDY9O376fspGb_Jxve12GKYOBXq94g3KR0jvvmDPIjOeS_7_wb7BIpREw=",
+    "1BVtsOGwBuz97tJLwZ_DRPNtA0UNw3aqGbF_1vATiPa2YVhIkF8lon9RqStdX3Q9wqt020r7wplavfqxGEiezhBH8tqkER2B1da591h-TepIsoTNjJPMVGhHAGf9rfnuehnfCO84u8jzun2pxJMN6yCQ1GkQ2LRwGK4Kj0X7rf9RdI2v-TnjQ-sK_ED-fekYQS4BHM80QOHHjyuRhj0SrTHGIzqoHTzV4yeYXXxMlYBpJtEjJoBcCnHnTBo27ARx_mM8Q6ucArrbHKeLd-lCCHirP1f7cxONqUUknZV-ZOIcx31cREKMgOhB4nEBBu-dkfUIolGT2Q9MppVN2LUbekzIrdGG3-pQ=",
+    "1BVtsOGwBuwKDPeuKNy2P6M5z2RWXitz9okHn35hEMdbM4UJqrNjEiQRAIl3TJNpd_1rz6o6Lo_mGOCS04CAon-qmH8vsOedujp7vMxHamJ_er8HO8fKocsoH1RzQSEe4-uPsclEgMrGFgQo1TLbPVmzS8-MhZmMpN5JArFVwVwdQax9X0eDOT66j2R-xxJg705BnfQ3eyiIrGJdmPYn98zmr4uvLOVo8fXmhiYL_w9ElNRZQ2HIMoAcn7yMF21JWoWaf3eRdK_nZULbdDWZivVvmGtIydaOfKW-xX2cEMeu3AUJH6z34z_QFuIq79u0PXqjO16HKz9-tDdA8GxkiHZMGx3lwQWY=",
+    "1BVtsOGwBuxTz-8TYWd-9IZVuW-PsEXNzGdrDeb0DoMN0AL9yp_oYb0TRdLW3cqA1JGDradwF4VBpO3Rd_YxPIGuq_Nqg1gkH4bGtMkxhTCEGvNlc5aNXz2Hk5aCJPf2GgjSuKdMTiKFOwGEJt8yjXes0pI5wDSGxl1kjmBK-c9aHZSgFyhVvjoovLLxpzRKJIR4D5GRRQgK-hO1ayfJSIxc1TPqSe6gWnj_8JzRcXt8MvXmCp2umlDn82bfE8OkuwL-uYkO8VkANK6dGi5Udgb41qSKYLhRJ3H8avdlviEz8W-ZInbiJyAFHx8dosnaeaCfoHs6YJ5b7YrAPjI1Qxjpk4_n9S8U=",
+    "1BVtsOGwBu5fwCYhIg7O2HuCnvef1hBennYEHs3rSeSuUoTA1f24f0Qjq9bwx2W08rKkA5jNBLdvwTzY8LUz3b437OYyun3mv26rPMSDfXikc_LyVvfUdv4-VkJZ4pmxufMonMj0aJBZGqeJDIWrGWbGazIUWHASRHkNdLVb_MfLpciXbS2Y9zY_bnPDLTE8N41DLRS0NO1JnjFOejID21L3g5ydTLi05j3bKGfV_KsxQFWW1qUIxmZJWbhSPpTZ5tadyqMscGUvKww4q3lqOjv9aLu_AWN_v913Uxlpbr8GIyHFulZRcLMlztI9R_nwkp7U1Y8p6Xd5xebMs9oYkC0LEpar1SGs=",
+    "1BVtsOGwBu7E239PpoxhLiuxrIBksx_B3p3nr8LGzXHELlfDtt1E506HU_G5Ma1Yc-tRXtBC8nlcHgJTc8xza7SjRZKfA_84m7_eqKsEntHy0eq5OzxsL7qJlYWsTfuoZ_L_xHqpF5YEIEhAnfwQQB_itB5P-18yIDEzq5RRkdF7KxLhbnBmsRXOvXXdvRhHCbw9dAZPyqpzrkXkABBEk0wa-t94EtG-dJIe5A7Nb7wFI4_TB8MOp3BG6Wagy7TOqse3gQb8KqPUb6hj-a8uaAq8qUZsL9bVFI1_qTHkiNAlkXiaViXAEEhxlROnUDYd8WzqedHbyVajW-zKswZtGmjtI2JDdX0k=",
+    "1BVtsOGwBu3QfGUilzcBH4y6-vgEdI55-c3t3ItHVuwhP8jtVDIYDbiUnRII4MhXaauC-OjzaLGGJ0Pp8YqlIxFMgv5puUUyf_wao3gzWns8O9m6ysWnaPXYvIr-D2jjq_6kDP8PP61oXQbIwzXRE9YIcZFs_rdopCsuMtWP-HR2B6OzScRhRodFEHS-9aZAUBJWah0trOw9ecPSZDHh5g4GmSgxZLKWMwW6RAcAySX_Kcw5e6QkFsb6pG6kVlr5tOonC1x8QoX4QSOoW87r3KGSqzplEdXeABXqBJ6MY15OD7vLCPc9TsvxWpDA_baTcajxUWEb3kzXQa3c2x6CLh96k5z0Jeyk=",
+    "1BVtsOGwBu3fLeWpMuvbfpT1wfsn6qRyzD0OxJxgM1u29F8CTbZzcThv3H7K5VOBSN9bkxcnmj2siqklhsDGxXdnZZxdJnFpVia5Gm1BH5sGFkLxWcREY7dKH2GVFI9MrJ5Fv-4gVHxd41JRnnSXw1jGgkwHhOd-fYVDRZzJ1-TbBexdbknBKzYJcwQM18k1SIoisxFl0NuCur6JlpR3cBK6XQualJmtv371kCF5wcrQ1slNqPwLpqxcusKKAr8JOi3yYjANuJc4qCn5CZkZ0_TpaxduXJU0RJEEXbDOBww8lF3dmPN7aU5KHohw67sNupOQFopCL9uzRi-sLUJPM4Yv3arJP2pY=",
+    "1BVtsOGwBuzbUMBBXeOMltxfcy7RKO8POYLJDaqzdsubqFiSZWNFsrENFN6b9YeI0kvBiqgxUWK0rMn9mvYSEQs3Wbw1c5b0oiPzPI64G6oINTUqT-S4U8Ckzq9C0Q_ILo8m_whJNq3CRnbJt1QdAWVE_DmtQ5tbvc07AM6BNVPJnDqyeQM118T56HXSb3ykuHS2ZVWtu1fQEQzwB23G3PBXMgpxxFTWYQDxvn_SPuLnxOoC8BbteQrWv2TgiKP1NMjUNtbvodPcwjAcZkVAX8nivkL-3PhGo1RNs3OdQGMAD30_yrOBFaZK5qyUWHfTvNE0Y9pJZOjw41gfc0rjUD2C34fpde2w="
 ]
 
 
 def load_accounts_config() -> List[dict]:
     """
-    Dynamically loads and configures Telegram accounts based on provided session keys.
-    Automatically scales up or down based on how many session keys are added or removed:
-    - Numbered env vars (SESSION_1, SESSION_2, ..., SESSION_N)
-    - Bulk env var (SESSIONS, SESSION_KEYS, TELEGRAM_SESSIONS) - newline or comma separated
-    - Single env var (SESSION)
-    - Optional local file (sessions.txt)
-    - Falls back to built-in pool only if no custom session keys are set anywhere
+    Dynamically loads Telegram session keys.
+    No account names or profiles are hardcoded in the code; all names and IDs
+    are automatically fetched directly from the Telegram session at connection.
     """
-    discovered: List[dict] = []
+    discovered: List[str] = []
     seen_sessions = set()
 
     # 1. Bulk sessions env var (newlines or commas)
@@ -75,7 +71,7 @@ def load_accounts_config() -> List[dict]:
             s = item.strip()
             if s and s not in seen_sessions:
                 seen_sessions.add(s)
-                discovered.append({"session": s, "name": f"Account #{len(discovered) + 1}"})
+                discovered.append(s)
 
     # 2. Numbered env vars: SESSION_1, SESSION_2, ..., SESSION_N
     numbered = []
@@ -90,15 +86,13 @@ def load_accounts_config() -> List[dict]:
         val = os.environ.get(k, "").strip()
         if val and val not in seen_sessions:
             seen_sessions.add(val)
-            name_override = os.environ.get(f"ACCOUNT_NAME_{num}", f"Account #{num}")
-            discovered.append({"session": val, "name": name_override})
+            discovered.append(val)
 
     # 3. Single SESSION env var
     single = os.environ.get("SESSION", "").strip()
     if single and single not in seen_sessions:
         seen_sessions.add(single)
-        name_override = os.environ.get("ACCOUNT_NAME_1", "Account #1")
-        discovered.insert(0, {"session": single, "name": name_override})
+        discovered.insert(0, single)
 
     # 4. Optional local sessions.txt file
     if not discovered and os.path.isfile("sessions.txt"):
@@ -108,30 +102,19 @@ def load_accounts_config() -> List[dict]:
                     s = line.strip()
                     if s and not s.startswith("#") and s not in seen_sessions:
                         seen_sessions.add(s)
-                        discovered.append({"session": s, "name": f"Account #{len(discovered) + 1}"})
+                        discovered.append(s)
         except Exception as e:
             logger.warning(f"Error reading sessions.txt: {e}")
 
-    # 5. If sessions were discovered dynamically, use ONLY those sessions!
-    recorder_idx = int(os.environ.get("RECORDER_ACCOUNT_INDEX", 1))
-    if discovered:
-        accounts = []
-        for idx, item in enumerate(discovered, start=1):
-            accounts.append({
-                "index": idx,
-                "name": item.get("name", f"Account #{idx}"),
-                "session": item["session"],
-                "is_recorder": (idx == recorder_idx),
-            })
-        return accounts
+    # Use dynamically discovered sessions, or fallback to default session keys
+    session_pool = discovered if discovered else DEFAULT_SESSIONS
 
-    # 6. Fallback pool: Used only if no custom session keys are set anywhere
+    recorder_idx = int(os.environ.get("RECORDER_ACCOUNT_INDEX", 1))
     accounts = []
-    for idx, item in enumerate(DEFAULT_ACCOUNTS, start=1):
+    for idx, s in enumerate(session_pool, start=1):
         accounts.append({
             "index": idx,
-            "name": item["name"],
-            "session": item["session"],
+            "session": s,
             "is_recorder": (idx == recorder_idx),
         })
     return accounts
@@ -142,15 +125,17 @@ ACCOUNTS_CONFIG = load_accounts_config()
 
 # ==================== ACCOUNT & APP STATE ====================
 class AccountState:
-    def __init__(self, index: int, name: str, session: str, is_recorder: bool):
+    def __init__(self, index: int, session: str, is_recorder: bool):
         self.index = index
-        self.name = name
         self.session_str = session
         self.is_recorder = is_recorder
         self.client: TelegramClient | None = None
         self.call_py: PyTgCalls | None = None
         self.user_id: int | None = None
-        self.display_name: str = name
+        self.name: str = f"Account #{index}"
+        self.telegram_name: str | None = None
+        self.username: str | None = None
+        self.display_name: str = f"Account #{index}"
         self.is_connected: bool = False
         self.is_joined: bool = False
         self.scheduled_join_time: float | None = None
@@ -164,7 +149,6 @@ class AppState:
         self.accounts: List[AccountState] = [
             AccountState(
                 cfg["index"],
-                cfg["name"],
                 cfg["session"],
                 cfg["is_recorder"],
             )
@@ -479,17 +463,24 @@ async def startup_event():
     state.add_log(f"Starting {len(state.accounts)} configured Telegram account(s)...")
     for acc in state.accounts:
         try:
-            state.add_log(f"Authenticating Account #{acc.index} ({acc.name})...")
+            state.add_log(f"Authenticating Account #{acc.index} from session key...")
             client = TelegramClient(StringSession(acc.session_str), API_ID, API_HASH)
             await client.start()
             acc.client = client
 
             me = await client.get_me()
+            first_name = (me.first_name or "").strip()
+            last_name = (me.last_name or "").strip()
+            name_parts = [p for p in (first_name, last_name) if p]
+            full_name = " ".join(name_parts) if name_parts else (me.username or f"User {me.id}")
+
             acc.user_id = me.id
-            acc.display_name = f"{me.first_name} (ID: {me.id})"
-            acc.name = me.first_name or acc.name
+            acc.telegram_name = full_name
+            acc.name = full_name
+            acc.username = me.username
+            acc.display_name = f"{full_name} (ID: {me.id})"
             acc.is_connected = True
-            state.add_log(f"Account #{acc.index} connected as: {acc.display_name}")
+            state.add_log(f"Account #{acc.index} session authenticated as: '{full_name}' (ID: {me.id})")
 
             state.add_log(f"Starting PyTgCalls engine for Account #{acc.index}...")
             call_py = PyTgCalls(client)
@@ -498,7 +489,8 @@ async def startup_event():
             state.add_log(f"Account #{acc.index} PyTgCalls engine ready.")
         except Exception as e:
             acc.error_message = str(e)
-            state.add_log(f"Account #{acc.index} initialization failed: {e}")
+            acc.name = f"Account #{acc.index} (Failed)"
+            state.add_log(f"Account #{acc.index} session authentication failed: {e}")
 
     # 3. Resolve target channel using first available connected client
     primary_client = next((acc.client for acc in state.accounts if acc.client and acc.client.is_connected()), None)
@@ -633,7 +625,9 @@ async def get_status():
         "accounts": [
             {
                 "index": acc.index,
-                "name": acc.name,
+                "name": acc.telegram_name or (acc.name if acc.is_connected else f"Account #{acc.index}"),
+                "telegram_name": acc.telegram_name,
+                "username": acc.username,
                 "display_name": acc.display_name,
                 "user_id": acc.user_id,
                 "is_connected": acc.is_connected,
@@ -1527,6 +1521,16 @@ HTML_PAGE = """<!DOCTYPE html>
             });
         }
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         async function triggerManualJoin() {
             try {
                 const res = await fetch('/api/join', { method: 'POST' });
@@ -1606,14 +1610,16 @@ HTML_PAGE = """<!DOCTYPE html>
                         }
 
                         const idxStr = acc.index < 10 ? `0${acc.index}` : `${acc.index}`;
+                        const displayName = acc.telegram_name || (acc.is_connected ? acc.name : `Account #${acc.index} (Connecting...)`);
+                        const handleDisplay = acc.username ? `@${acc.username}` : (acc.user_id ? `ID: ${acc.user_id}` : 'Authenticating session...');
                         return `
                             <div class="account-card ${cardClass}">
                                 <div class="acc-top">
                                     <span class="acc-role-badge ${roleClass}">${roleText}</span>
                                     <span style="font-size:0.75rem; font-weight:800; font-family:'Space Mono'">#${idxStr}</span>
                                 </div>
-                                <div class="acc-name">${acc.name}</div>
-                                <div class="acc-id">ID: ${acc.user_id || 'Connecting...'}</div>
+                                <div class="acc-name">${escapeHtml(displayName)}</div>
+                                <div class="acc-id">${escapeHtml(handleDisplay)}</div>
                                 <div class="acc-status-tag ${statusClass}">
                                     <span>${statusText}</span>
                                 </div>
